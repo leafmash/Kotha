@@ -44,8 +44,6 @@
       <button class="rbtn" data-f="group" title="গ্রুপ"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6 6 0 0 1 3.5 6"/></svg></button>
     </div>
     <div class="rail-bottom">
-      <button class="rbtn" id="railTheme" title="থিম"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 3a9 9 0 0 1 0 18z" class="fill"/></svg></button>
-      <button class="rbtn" id="railLogout" title="সাইন আউট"><svg viewBox="0 0 24 24"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/></svg></button>
       <button class="rprofile" id="railMe" title="ছবি বদলান"><img id="railImg" alt=""></button>
     </div>
   </nav>
@@ -54,10 +52,10 @@
       <b class="dtitle">চ্যাট</b>
       <div class="me" id="meBtn" title="ছবি বদলান"><img id="meImg" alt=""><b id="meName"></b></div>
       <div class="actions">
-        <button id="addBtn" title="নতুন মেম্বার যোগ করুন"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/></svg></button>
-        <button id="themeBtn" title="থিম"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" class="fill"/></svg></button>
-        <button id="logoutBtn" title="সাইন আউট"><svg viewBox="0 0 24 24"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/></svg></button>
+        <button id="addBtn" title="কন্টাক্ট যোগ করুন"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/></svg></button>
+        <button id="menuBtn" title="আরও" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24"><circle class="fill" cx="12" cy="5" r="1.8"/><circle class="fill" cx="12" cy="12" r="1.8"/><circle class="fill" cx="12" cy="19" r="1.8"/></svg></button>
       </div>
+      <div id="moreMenu" hidden role="menu"></div>
     </header>
     <div class="search"><input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="কথোপকথন খুঁজুন"></div>
     <div class="chips" id="chips"><button data-f="all" class="on">সব</button><button data-f="unread">অপঠিত</button></div>
@@ -98,9 +96,25 @@
 
 <div id="sheet" hidden>
   <div class="panel">
-    <header><button id="sheetClose" title="বন্ধ করুন"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><b>নতুন গ্রুপ</b><button id="sheetDone" class="text">তৈরি করুন</button></header>
-    <input id="groupName" placeholder="গ্রুপের নাম">
-    <div id="members"></div>
+    <header>
+      <button id="sheetClose" title="ফিরে যান"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="ht"><b>নতুন গ্রুপ</b><small id="sheetCount">মেম্বার বেছে নিন</small></div>
+      <button id="sheetDone" class="text off">তৈরি করুন</button>
+    </header>
+    <div class="gbody">
+      <div class="gname">
+        <div class="gicon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6 6 0 0 1 3.5 6"/></svg></div>
+        <input id="groupName" placeholder="গ্রুপের নাম" maxlength="40" autocomplete="off">
+      </div>
+      <div id="pickedSec" hidden><div id="picked"></div></div>
+      <div class="gsearch">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="groupFind" type="search" inputmode="email" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="ইমেইল দিয়ে কন্টাক্ট খুঁজুন">
+      </div>
+      <div id="groupFindResult"></div>
+      <div class="glabel" id="membersLabel">আপনার কন্টাক্ট</div>
+      <div id="members"></div>
+    </div>
   </div>
 </div>
 <div id="confirm" hidden role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmText">
@@ -131,10 +145,16 @@
 </div>
 <div id="findSheet" hidden>
   <div class="panel">
-    <header><button id="findClose" title="বন্ধ করুন"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><b>নতুন মেম্বার যোগ করুন</b><span class="spacer"></span></header>
+    <header>
+      <button id="findClose" title="ফিরে যান"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="ht"><b>কন্টাক্ট যোগ করুন</b></div>
+    </header>
     <div class="findbox">
-      <p class="fhint">যাকে খুঁজছেন তার পুরো ইমেইল ঠিকানা লিখুন। নাম দিয়ে কাউকে খোঁজা যায় না।</p>
-      <input id="findInput" type="search" inputmode="email" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="name@example.com">
+      <div class="gsearch">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="findInput" type="search" inputmode="email" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="name@example.com">
+      </div>
+      <p class="fhint">যাকে যোগ করতে চান তার পুরো ইমেইল ঠিকানা লিখুন। নাম দিয়ে কাউকে খোঁজা যায় না।</p>
       <div id="findResult"></div>
     </div>
   </div>
