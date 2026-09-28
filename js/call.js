@@ -25,6 +25,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
   let toneTimer = null;
   let hideTimer = null;
   let drag = null;
+  let canRoute = false;
 
   const myUid = () => auth.currentUser?.uid || "";
 
@@ -175,8 +176,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     $("callIn").hidden = c.dir !== "in";
     $("callBar").hidden = c.dir === "in";
     $("callCam").hidden = !c.video;
-    $("callSpeaker").hidden = true;
-    $("callFlip").hidden = true;
+    $("callFlip").hidden = !c.video;
     setLocalPos(16, 16);
     $("callMute").classList.remove("off");
     $("callCam").classList.remove("off");
@@ -196,16 +196,6 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     $("localVideo").srcObject = null;
     $("remoteVideo").srcObject = null;
   };
-
-  async function refreshFlip(c) {
-    if (!c.video || !navigator.mediaDevices.enumerateDevices) return;
-    try {
-      const list = await navigator.mediaDevices.enumerateDevices();
-      if (call === c && list.filter(d => d.kind === "videoinput").length > 1) $("callFlip").hidden = false;
-    } catch {
-      return;
-    }
-  }
 
   function queueCand(c, cand) {
     c.out.push(cand);
@@ -323,7 +313,6 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
       }).catch(() => {});
     }
     layout(c);
-    refreshFlip(c);
     return pc;
   }
 
@@ -556,12 +545,14 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
   };
 
   async function setupSpeaker() {
-    $("callSpeaker").hidden = true;
+    canRoute = false;
+    $("callSpeaker").classList.add("dim");
     if (!("setSinkId" in HTMLMediaElement.prototype) || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
     try {
       const list = await navigator.mediaDevices.enumerateDevices();
       const outs = list.filter(d => d.kind === "audiooutput" && d.deviceId);
-      if (call && outs.length > 1) $("callSpeaker").hidden = false;
+      canRoute = outs.length > 1;
+      $("callSpeaker").classList.toggle("dim", !canRoute);
     } catch {
       return;
     }
@@ -569,6 +560,10 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
 
   async function pickSpeaker() {
     if (!call || !askChoice) return;
+    if (!canRoute) {
+      toast("এই ডিভাইসে অডিও আউটপুট বদলানো যায় না");
+      return;
+    }
     let outs;
     try {
       const list = await navigator.mediaDevices.enumerateDevices();
@@ -611,7 +606,6 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     let ox = 0;
     let oy = 0;
     wrap.addEventListener("pointerdown", e => {
-      if (e.target.closest("#callFlip")) return;
       wrap.setPointerCapture(e.pointerId);
       const r = wrap.getBoundingClientRect();
       ox = r.left;
