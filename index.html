@@ -54,14 +54,18 @@
       <b class="dtitle">চ্যাট</b>
       <div class="me" id="meBtn" title="ছবি বদলান"><img id="meImg" alt=""><b id="meName"></b></div>
       <div class="actions">
-        <button id="groupBtn" title="নতুন গ্রুপ"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6 6 0 0 1 3.5 6"/></svg></button>
+        <button id="addBtn" title="নতুন মেম্বার যোগ করুন"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/></svg></button>
         <button id="themeBtn" title="থিম"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" class="fill"/></svg></button>
         <button id="logoutBtn" title="সাইন আউট"><svg viewBox="0 0 24 24"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/></svg></button>
       </div>
     </header>
-    <div class="search"><input id="search" type="search" inputmode="email" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="ইমেইল দিয়ে খুঁজুন"></div>
-    <div class="chips" id="chips"><button data-f="all" class="on">সব</button><button data-f="unread">অপঠিত</button><button data-f="group">গ্রুপ</button></div>
+    <div class="search"><input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="কথোপকথন খুঁজুন"></div>
+    <div class="chips" id="chips"><button data-f="all" class="on">সব</button><button data-f="unread">অপঠিত</button></div>
     <div id="list"></div>
+    <nav id="tabs">
+      <button class="on" data-f="all"><svg viewBox="0 0 24 24"><path d="M12 3C6.5 3 2 6.8 2 11.5c0 2.4 1.2 4.6 3.1 6.1L4 21l3.9-1.9c1.3.5 2.7.8 4.1.8 5.5 0 10-3.8 10-8.5S17.5 3 12 3z"/></svg><span>চ্যাট</span><i class="tbadge" id="tabBadge" hidden></i></button>
+      <button data-f="group"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6 6 0 0 1 3.5 6"/></svg><span>গ্রুপ</span></button>
+    </nav>
   </aside>
 
   <section id="chat">
@@ -123,6 +127,16 @@
     <div class="mreacts" id="menuReacts"></div>
     <div class="mpreview" id="menuPreview"></div>
     <div class="mitems" id="menuItems"></div>
+  </div>
+</div>
+<div id="findSheet" hidden>
+  <div class="panel">
+    <header><button id="findClose" title="বন্ধ করুন"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><b>নতুন মেম্বার যোগ করুন</b><span class="spacer"></span></header>
+    <div class="findbox">
+      <p class="fhint">যাকে খুঁজছেন তার পুরো ইমেইল ঠিকানা লিখুন। নাম দিয়ে কাউকে খোঁজা যায় না।</p>
+      <input id="findInput" type="search" inputmode="email" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="name@example.com">
+      <div id="findResult"></div>
+    </div>
   </div>
 </div>
 <div id="lightbox" hidden><img alt=""></div>
