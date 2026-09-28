@@ -59,7 +59,7 @@
         <button id="logoutBtn" title="সাইন আউট"><svg viewBox="0 0 24 24"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/></svg></button>
       </div>
     </header>
-    <div class="search"><input id="search" type="search" placeholder="খুঁজুন"></div>
+    <div class="search"><input id="search" type="search" inputmode="email" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="ইমেইল দিয়ে খুঁজুন"></div>
     <div class="chips" id="chips"><button data-f="all" class="on">সব</button><button data-f="unread">অপঠিত</button><button data-f="group">গ্রুপ</button></div>
     <div id="list"></div>
   </aside>
@@ -97,6 +97,32 @@
     <header><button id="sheetClose" title="বন্ধ করুন"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><b>নতুন গ্রুপ</b><button id="sheetDone" class="text">তৈরি করুন</button></header>
     <input id="groupName" placeholder="গ্রুপের নাম">
     <div id="members"></div>
+  </div>
+</div>
+<div id="confirm" hidden role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmText">
+  <div class="dialog">
+    <div class="dicon" id="confirmIcon"></div>
+    <h3 id="confirmTitle"></h3>
+    <p id="confirmText"></p>
+    <div class="dbtns">
+      <button class="dcancel" id="confirmCancel">বাতিল</button>
+      <button class="dok" id="confirmOk"></button>
+    </div>
+  </div>
+</div>
+<div id="choice" hidden role="dialog" aria-modal="true" aria-labelledby="choiceTitle">
+  <div class="dialog">
+    <div class="dicon" id="choiceIcon"></div>
+    <h3 id="choiceTitle"></h3>
+    <p id="choiceText"></p>
+    <div class="dbtns col" id="choiceBtns"></div>
+  </div>
+</div>
+<div id="msgMenu" hidden role="dialog" aria-modal="true">
+  <div class="menu">
+    <div class="mreacts" id="menuReacts"></div>
+    <div class="mpreview" id="menuPreview"></div>
+    <div class="mitems" id="menuItems"></div>
   </div>
 </div>
 <div id="lightbox" hidden><img alt=""></div>

@@ -8,8 +8,24 @@ service cloud.firestore {
       return signedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members;
     }
     match /users/{userId} {
-      allow read: if signedIn();
-      allow write: if signedIn() && request.auth.uid == userId;
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update, delete: if signedIn() && request.auth.uid == userId;
+    }
+    match /emailLookup/{email} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == email
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid;
+      allow update: if signedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == email
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
     }
     match /pushTokens/{userId} {
       allow read, write: if signedIn() && request.auth.uid == userId;
@@ -25,7 +41,7 @@ service cloud.firestore {
         allow create: if isMember(chatId) && request.resource.data.from == request.auth.uid;
         allow update: if isMember(chatId)
           && (resource.data.from == request.auth.uid
-            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reactions']));
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reactions', 'hiddenFor']));
       }
     }
   }
