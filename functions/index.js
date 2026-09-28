@@ -46,3 +46,30 @@ exports.notifyMessage = onDocumentCreated("chats/{chatId}/messages/{messageId}",
     if (dead.length) await ref.update({ tokens: FieldValue.arrayRemove(...dead) });
   }));
 });
+
+exports.notifyCall = onDocumentCreated("calls/{callId}", async event => {
+  const call = event.data.data();
+  if (call.status !== "ringing") return;
+  const callerSnap = await db.doc(`users/${call.caller}`).get();
+  const callerName = callerSnap.exists ? callerSnap.data().name || "" : "";
+  const ref = db.doc(`pushTokens/${call.callee}`);
+  const snap = await ref.get();
+  const tokens = snap.exists ? snap.data().tokens || [] : [];
+  if (!tokens.length) return;
+  const res = await getMessaging().sendEachForMulticast({
+    tokens,
+    data: {
+      type: "call",
+      title: call.video ? "ইনকামিং ভিডিও কল" : "ইনকামিং ভয়েস কল",
+      body: callerName,
+      chatId: call.chatId || ""
+    },
+    webpush: { headers: { Urgency: "high", TTL: "60" } }
+  });
+  const dead = [];
+  res.responses.forEach((r, i) => {
+    const code = r.error && r.error.code;
+    if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") dead.push(tokens[i]);
+  });
+  if (dead.length) await ref.update({ tokens: FieldValue.arrayRemove(...dead) });
+});
