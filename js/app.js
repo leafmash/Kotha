@@ -50,7 +50,82 @@ const listTime = ts => {
   const d = ts.toDate();
   return d.toDateString() === new Date().toDateString() ? clock(ts) : d.toLocaleDateString([], { day: "numeric", month: "short" });
 };
-const preview = m => m.deleted ? "🚫 মেসেজ মুছে ফেলা হয়েছে" : ({ image: "📷 ছবি", video: "🎬 ভিডিও", audio: "🎤 ভয়েস মেসেজ", file: "📎 " + (m.name || "ফাইল") }[m.type] || m.text);
+const preview = m => m.deleted ? "মেসেজ মুছে ফেলা হয়েছে" : ({ image: "ছবি", video: "ভিডিও", audio: "ভয়েস মেসেজ", file: m.name || "ফাইল" }[m.type] || m.text);
+
+const icons = {
+  ban: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+  clip: '<path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.5 3.5 0 0 1 5 5L10 17.5a2 2 0 0 1-3-3l7.5-7.5"/>',
+  reply: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v3"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  checks: '<path d="M2 12.5l4.5 4.5L15 8M10 15.5l1.5 1.5L21 7.5"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+  logout: '<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/>'
+};
+const icon = (name, cls) => {
+  const s = el("span", "ico" + (cls ? " " + cls : ""));
+  s.innerHTML = `<svg viewBox="0 0 24 24">${icons[name]}</svg>`;
+  return s;
+};
+
+const confirmBox = $("confirm");
+let confirmDone;
+const closeConfirm = ok => {
+  if (confirmBox.hidden) return;
+  confirmBox.hidden = true;
+  const done = confirmDone;
+  confirmDone = null;
+  if (done) done(ok);
+};
+const askConfirm = ({ title, text, ok, iconName }) => new Promise(resolve => {
+  closeConfirm(false);
+  $("confirmIcon").replaceChildren(icon(iconName));
+  $("confirmTitle").textContent = title;
+  $("confirmText").textContent = text;
+  $("confirmOk").textContent = ok;
+  confirmDone = resolve;
+  confirmBox.hidden = false;
+  $("confirmCancel").focus();
+});
+const choiceBox = $("choice");
+let choiceDone;
+const closeChoice = value => {
+  if (choiceBox.hidden) return;
+  choiceBox.hidden = true;
+  const done = choiceDone;
+  choiceDone = null;
+  if (done) done(value);
+};
+const askChoice = ({ title, text, iconName, options }) => new Promise(resolve => {
+  closeChoice(null);
+  $("choiceIcon").replaceChildren(icon(iconName));
+  $("choiceTitle").textContent = title;
+  $("choiceText").textContent = text;
+  const btns = options.map(o => {
+    const b = el("button", o.kind || "", o.label);
+    b.onclick = () => closeChoice(o.value);
+    return b;
+  });
+  $("choiceBtns").replaceChildren(...btns);
+  choiceDone = resolve;
+  choiceBox.hidden = false;
+  btns[btns.length - 1].focus();
+});
+choiceBox.onclick = e => { if (e.target === choiceBox) closeChoice(null); };
+
+const menuBox = $("msgMenu");
+const closeMenu = () => { menuBox.hidden = true; };
+menuBox.onclick = e => { if (e.target === menuBox) closeMenu(); };
+
+$("confirmOk").onclick = () => closeConfirm(true);
+$("confirmCancel").onclick = () => closeConfirm(false);
+confirmBox.onclick = e => { if (e.target === confirmBox) closeConfirm(false); };
+addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  closeConfirm(false);
+  closeChoice(null);
+  closeMenu();
+});
 
 let toastTimer;
 const toast = (text, sticky) => {
@@ -73,6 +148,10 @@ let chatsReady = false;
 let msgUnsub = null;
 let pendingChat = new URLSearchParams(location.search).get("chat");
 let usersLoaded = false;
+const userWatch = new Map();
+const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+let searchState = { term: "", status: "idle", user: null };
+let searchTimer;
 let splashTimer;
 let filter = "all";
 const drafts = new Map();
@@ -146,6 +225,8 @@ $("googleBtn").onclick = async () => {
 };
 
 $("logoutBtn").onclick = async () => {
+  const ok = await askConfirm({ title: "সাইন আউট করবেন?", text: "আপনি এই ডিভাইস থেকে সাইন আউট হয়ে যাবেন। আবার সাইন ইন করে চ্যাটে ফিরতে পারবেন।", ok: "সাইন আউট", iconName: "logout" });
+  if (!ok) return;
   await unregisterPush();
   await setPresence(false);
   await signOut(auth);
@@ -181,11 +262,21 @@ onAuthStateChanged(auth, async user => {
   $("auth").hidden = true;
   usersLoaded = false;
   chatsReady = false;
+  users = new Map();
+  searchState = { term: "", status: "idle", user: null };
   const ref = doc(db, "users", user.uid);
   try {
     const snap = await getDoc(ref);
     if (!snap.exists()) {
-      await setDoc(ref, { uid: user.uid, name: pendingName || user.displayName || user.email.split("@")[0], email: user.email, photo: user.photoURL || "" }, { merge: true });
+      await setDoc(ref, { uid: user.uid, name: pendingName || user.displayName || (user.email || "").split("@")[0] || "ব্যবহারকারী", photo: user.photoURL || "" }, { merge: true });
+    } else if ("email" in snap.data()) {
+      await updateDoc(ref, { email: deleteField() });
+    }
+    const mail = (user.email || "").toLowerCase();
+    if (mail) {
+      const lref = doc(db, "emailLookup", mail);
+      const lsnap = await getDoc(lref);
+      if (!lsnap.exists() || lsnap.data().uid !== user.uid) await setDoc(lref, { uid: user.uid });
     }
   } catch (err) {
     hideSplash();
@@ -194,14 +285,11 @@ onAuthStateChanged(auth, async user => {
   $("app").hidden = false;
   registerPush();
   setPresence(true);
-  unsubs.push(onSnapshot(collection(db, "users"), s => {
-    users = new Map(s.docs.map(d => [d.id, d.data()]));
-    usersLoaded = true;
-    renderMe();
-    renderList();
-    renderPeer();
-    checkReady();
-  }, hideSplash));
+  unsubs.push(() => {
+    userWatch.forEach(u => u());
+    userWatch.clear();
+  });
+  watchUser(user.uid);
   unsubs.push(onSnapshot(query(collection(db, "chats"), where("members", "array-contains", user.uid)), s => {
     const initial = !chatsReady;
     chatsReady = true;
@@ -214,10 +302,58 @@ onAuthStateChanged(auth, async user => {
       if (document.hidden || active?.id !== ch.doc.id) notify(c, ch.doc.id);
     });
     chats = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    chats.flatMap(c => c.members || []).forEach(watchUser);
     renderList();
     checkReady();
   }, hideSplash));
 });
+
+function watchUser(id) {
+  if (!id || userWatch.has(id)) return;
+  userWatch.set(id, onSnapshot(doc(db, "users", id), s => {
+    if (s.exists()) users.set(id, s.data());
+    else users.delete(id);
+    if (auth.currentUser && id === auth.currentUser.uid) {
+      usersLoaded = true;
+      renderMe();
+    }
+    renderList();
+    renderPeer();
+    checkReady();
+  }, () => {
+    if (auth.currentUser && id === auth.currentUser.uid) {
+      usersLoaded = true;
+      checkReady();
+    }
+  }));
+}
+
+async function runSearch(term) {
+  searchState = { term, status: "loading", user: null };
+  renderList();
+  let next = { term, status: "none", user: null };
+  try {
+    const hit = await getDoc(doc(db, "emailLookup", term));
+    if (searchState.term !== term) return;
+    if (hit.exists()) {
+      if (hit.data().uid === auth.currentUser.uid) {
+        next.status = "self";
+      } else {
+        const p = await getDoc(doc(db, "users", hit.data().uid));
+        if (searchState.term !== term) return;
+        if (p.exists()) {
+          next = { term, status: "found", user: p.data() };
+          users.set(p.id, p.data());
+          watchUser(p.id);
+        }
+      }
+    }
+  } catch {
+    next.status = "error";
+  }
+  searchState = next;
+  renderList();
+}
 
 function renderMe() {
   const me = users.get(auth.currentUser.uid);
@@ -266,16 +402,30 @@ function renderList() {
   if (!auth.currentUser) return;
   const uid = auth.currentUser.uid;
   const term = $("search").value.trim().toLowerCase();
-  const others = [...users.values()].filter(u => u.uid !== uid);
   const totalUnread = chats.reduce((n, c) => n + (c.unread?.[uid] || 0), 0);
   document.title = (totalUnread ? `(${totalUnread}) ` : "") + "কথা";
   $("railBadge").hidden = !totalUnread;
   $("railBadge").textContent = totalUnread > 99 ? "99+" : totalUnread;
 
   if (term) {
-    const found = others.filter(u => (u.name || "").toLowerCase().includes(term) || (u.email || "").toLowerCase().includes(term));
-    found.forEach(u => list.append(row(u, u.email || "", "", 0, () => { $("search").value = ""; openChat(u); })));
-    if (!found.length) list.append(el("p", "hint", "এই নামে কাউকে পাওয়া যায়নি।"));
+    const s = searchState;
+    if (!emailRe.test(term)) {
+      list.append(el("p", "hint", "কাউকে খুঁজতে তার পুরো ইমেইল ঠিকানা লিখুন, যেমন name@example.com"));
+    } else if (s.term !== term || s.status === "idle" || s.status === "loading") {
+      list.append(el("p", "hint", "খোঁজা হচ্ছে…"));
+    } else if (s.status === "found") {
+      list.append(row(s.user, term, "", 0, () => {
+        $("search").value = "";
+        searchState = { term: "", status: "idle", user: null };
+        openChat(s.user);
+      }));
+    } else if (s.status === "self") {
+      list.append(el("p", "hint", "এটি আপনার নিজের ইমেইল।"));
+    } else if (s.status === "error") {
+      list.append(el("p", "hint", "খুঁজতে সমস্যা হয়েছে, আবার চেষ্টা করুন।"));
+    } else {
+      list.append(el("p", "hint", "এই ইমেইলে কাউকে পাওয়া যায়নি।"));
+    }
     return;
   }
 
@@ -298,14 +448,15 @@ function renderList() {
       list.append(row(peer, sub, listTime(c.lastAt), c.unread?.[uid] || 0, () => openChat(peer), active?.peer === peer.uid));
     });
 
-  const rest = filter === "all" ? others.filter(u => !talked.has(u.uid)) : [];
-  if (rest.length) {
-    list.append(el("div", "sec", talked.size ? "নতুন কথা শুরু করুন" : "সবাই"));
-    rest.forEach(u => list.append(row(u, u.email || "", "", 0, () => openChat(u), active?.peer === u.uid)));
-  }
-  if (!list.children.length) list.append(el("p", "hint", filter === "all" ? "এখনও কেউ যোগ দেয়নি। বন্ধুকে অ্যাপে আমন্ত্রণ জানান।" : "কোনো চ্যাট নেই।"));
+  if (!list.children.length) list.append(el("p", "hint", filter === "all" ? "কথা শুরু করতে উপরের সার্চ বক্সে বন্ধুর পুরো ইমেইল ঠিকানা লিখুন।" : "কোনো চ্যাট নেই।"));
 }
-$("search").oninput = renderList;
+$("search").oninput = () => {
+  clearTimeout(searchTimer);
+  const term = $("search").value.trim().toLowerCase();
+  if (emailRe.test(term)) searchTimer = setTimeout(() => runSearch(term), 300);
+  else searchState = { term, status: "idle", user: null };
+  renderList();
+};
 $("chips").onclick = e => {
   const b = e.target.closest("button");
   if (!b) return;
@@ -355,7 +506,7 @@ async function openChat(peer, group) {
   msgUnsub?.();
   msgUnsub = null;
   const ref = doc(db, "chats", id);
-  if (!group) await setDoc(ref, { members: [uid, peer.uid] }, { merge: true });
+  if (!group && !chats.some(c => c.id === id)) await setDoc(ref, { members: [uid, peer.uid] }, { merge: true });
   active = { id, peer: group ? null : peer.uid, group: !!group, members: group ? group.members : [uid, peer.uid], reply: null, data: group || null, first: true, lastId: null, limit: PAGE, hasMore: false, olderLoad: false };
   $("empty").hidden = true;
   $("pane").hidden = false;
@@ -434,8 +585,9 @@ function renderPeer() {
   else status.textContent = peer.lastSeen ? "সর্বশেষ দেখা " + dayLabel(peer.lastSeen.toDate()) + ", " + clock(peer.lastSeen) : "অফলাইন";
 }
 
-function renderMessages(docs) {
+function renderMessages(all) {
   const uid = auth.currentUser.uid;
+  const docs = all.filter(d => !(d.data().hiddenFor || []).includes(uid));
   const box = $("messages");
   const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
   const prevHeight = box.scrollHeight;
@@ -475,7 +627,9 @@ function renderMessages(docs) {
     }
 
     if (m.deleted) {
-      b.append(el("em", "gone", "🚫 মেসেজ মুছে ফেলা হয়েছে"));
+      const gone = el("em", "gone");
+      gone.append(icon("ban"), " মেসেজ মুছে ফেলা হয়েছে");
+      b.append(gone);
     } else if (m.type === "image") {
       const img = el("img", "media");
       img.src = m.url;
@@ -495,7 +649,8 @@ function renderMessages(docs) {
       a.controls = true;
       b.append(a);
     } else if (m.type === "file") {
-      const a = el("a", "file", "📎 " + (m.name || "ফাইল"));
+      const a = el("a", "file");
+      a.append(icon("clip"), " " + (m.name || "ফাইল"));
       a.href = m.url;
       a.target = "_blank";
       a.rel = "noopener";
@@ -517,31 +672,15 @@ function renderMessages(docs) {
     }
     const meta = el("div", "meta");
     meta.append(el("span", "", clock(m.at)));
-    if (mine && !m.deleted) meta.append(el("span", m.status === "seen" ? "seen" : "", m.status === "seen" ? "✓✓" : "✓"));
+    if (mine && !m.deleted) {
+      const seen = m.status === "seen";
+      const tick = el("span", seen ? "seen" : "");
+      tick.append(icon(seen ? "checks" : "check", "tick"));
+      meta.append(tick);
+    }
     b.append(meta);
 
-    if (!m.deleted) {
-      const acts = el("div", "acts");
-      ["👍", "❤️", "😂", "😮", "🙏"].forEach(em => {
-        const r = el("button", "", em);
-        r.onclick = () => react(d, em);
-        acts.append(r);
-      });
-      const reply = el("button", "", "↩");
-      reply.title = "উত্তর দিন";
-      reply.onclick = () => setReply(preview(m), d.id);
-      acts.append(reply);
-      if (mine) {
-        const del = el("button", "", "🗑");
-        del.title = "মুছুন";
-        del.onclick = () => removeMessage(d);
-        acts.append(del);
-      }
-      b.append(acts);
-    }
-    b.onclick = e => {
-      if (!e.target.closest("button,a,img,video,audio")) b.classList.toggle("open");
-    };
+    attachGestures(b, d, m, mine);
     box.append(b);
   });
 
@@ -555,11 +694,144 @@ function renderMessages(docs) {
 }
 
 async function removeMessage(d) {
-  if (!confirm("এই মেসেজটি সবার জন্য মুছে ফেলবেন?")) return;
+  const uid = auth.currentUser.uid;
+  const mine = d.data().from === uid;
+  const options = [];
+  if (mine) options.push({ label: "সবার জন্য মুছুন", value: "all", kind: "dok" });
+  options.push({ label: "আমার জন্য মুছুন", value: "me", kind: mine ? "dsoft" : "dok" });
+  options.push({ label: "বাতিল", value: null, kind: "dcancel" });
+  const choice = await askChoice({
+    title: "মেসেজ মুছবেন?",
+    text: mine ? "সবার জন্য মুছলে মেসেজটি সবার চ্যাট থেকে সরে যাবে। শুধু আপনার জন্য মুছলে অন্যরা এটি দেখতে পাবে।" : "মেসেজটি শুধু আপনার চ্যাট থেকে সরে যাবে, অন্যরা এটি দেখতে পাবে।",
+    iconName: "trash",
+    options
+  });
+  if (!choice) return;
+  if (choice === "me") {
+    await updateDoc(d.ref, { hiddenFor: arrayUnion(uid) });
+    return;
+  }
   const chatId = active.id;
   const wasLast = d.id === active.lastId;
   await updateDoc(d.ref, { deleted: true, text: "", url: "" });
-  if (wasLast) await setDoc(doc(db, "chats", chatId), { lastMessage: "🚫 মেসেজ মুছে ফেলা হয়েছে" }, { merge: true });
+  if (wasLast) await setDoc(doc(db, "chats", chatId), { lastMessage: "মেসেজ মুছে ফেলা হয়েছে" }, { merge: true });
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const t = document.createElement("textarea");
+    t.value = text;
+    t.style.position = "fixed";
+    t.style.opacity = "0";
+    document.body.append(t);
+    t.select();
+    document.execCommand("copy");
+    t.remove();
+  }
+  toast("কপি করা হয়েছে");
+}
+
+function openMenu(d, m, mine) {
+  const uid = auth.currentUser.uid;
+  const reacts = $("menuReacts");
+  reacts.replaceChildren();
+  if (!m.deleted) {
+    ["👍", "❤️", "😂", "😮", "🙏"].forEach(em => {
+      const r = el("button", m.reactions?.[uid] === em ? "own" : "", em);
+      r.onclick = () => { closeMenu(); react(d, em); };
+      reacts.append(r);
+    });
+  }
+  reacts.hidden = !!m.deleted;
+  $("menuPreview").textContent = preview(m);
+  const items = [];
+  const item = (name, label, fn, danger) => {
+    const b = el("button", danger ? "danger" : "");
+    b.append(icon(name), el("span", "", label));
+    b.onclick = () => { closeMenu(); fn(); };
+    items.push(b);
+  };
+  if (!m.deleted) {
+    item("reply", "উত্তর দিন", () => setReply(preview(m), d.id));
+    const copyable = m.type === "text" || !m.type ? m.text : m.url;
+    if (copyable) item("copy", "কপি করুন", () => copyText(copyable));
+  }
+  item("trash", "মুছুন", () => removeMessage(d), true);
+  $("menuItems").replaceChildren(...items);
+  menuBox.hidden = false;
+}
+
+function attachGestures(b, d, m, mine) {
+  const ico = el("div", "swipe-ico");
+  ico.append(icon("reply"));
+  b.append(ico);
+  let sx = 0, sy = 0, dx = 0, timer = null, swiping = false, tracking = false, fired = false;
+  const cancelPress = () => { clearTimeout(timer); timer = null; };
+  const reset = () => {
+    b.style.transition = "transform .2s";
+    b.style.transform = "";
+    ico.style.opacity = 0;
+    setTimeout(() => { b.style.transition = ""; }, 220);
+  };
+  const show = () => {
+    cancelPress();
+    fired = true;
+    if (navigator.vibrate) navigator.vibrate(12);
+    openMenu(d, m, mine);
+  };
+  b.addEventListener("pointerdown", e => {
+    if (e.pointerType === "mouse") return;
+    tracking = true;
+    swiping = false;
+    fired = false;
+    sx = e.clientX;
+    sy = e.clientY;
+    dx = 0;
+    cancelPress();
+    timer = setTimeout(show, 450);
+  });
+  b.addEventListener("pointermove", e => {
+    if (!tracking || fired) return;
+    const mx = e.clientX - sx;
+    const my = e.clientY - sy;
+    if (!swiping && (Math.abs(mx) > 10 || Math.abs(my) > 10)) cancelPress();
+    if (!swiping && mx > 12 && mx > Math.abs(my) * 1.4 && !m.deleted) swiping = true;
+    if (!swiping) return;
+    dx = Math.max(0, Math.min(mx, 90));
+    b.style.transform = `translateX(${dx}px)`;
+    ico.style.opacity = Math.min(1, dx / 60);
+    ico.classList.toggle("ready", dx >= 60);
+  });
+  const end = () => {
+    if (!tracking) return;
+    tracking = false;
+    cancelPress();
+    if (swiping) {
+      if (dx >= 60) {
+        if (navigator.vibrate) navigator.vibrate(10);
+        setReply(preview(m), d.id);
+      }
+      swiping = false;
+      ico.classList.remove("ready");
+      reset();
+    }
+  };
+  b.addEventListener("pointerup", end);
+  b.addEventListener("pointercancel", end);
+  b.addEventListener("contextmenu", e => {
+    e.preventDefault();
+    if (menuBox.hidden) show();
+  });
+  b.addEventListener("click", e => {
+    if (fired || dx >= 12) {
+      e.preventDefault();
+      e.stopPropagation();
+      fired = false;
+      dx = 0;
+    }
+  }, true);
 }
 
 function setReply(text, id) {
@@ -811,7 +1083,12 @@ $("groupBtn").onclick = () => {
   $("groupName").value = "";
   const box = $("members");
   box.replaceChildren();
-  [...users.values()].filter(u => u.uid !== auth.currentUser.uid).forEach(u => {
+  const me = auth.currentUser.uid;
+  const contacts = [...new Set(chats.filter(c => !c.group && c.lastMessage).map(c => c.members.find(m => m !== me)))]
+    .map(id => users.get(id))
+    .filter(Boolean);
+  if (!contacts.length) box.append(el("p", "hint", "গ্রুপে যোগ করতে আগে ইমেইল দিয়ে খুঁজে তাদের সাথে চ্যাট শুরু করুন।"));
+  contacts.forEach(u => {
     const label = el("label", "pick");
     const img = el("img");
     img.src = pic(u);
@@ -819,7 +1096,7 @@ $("groupBtn").onclick = () => {
     const cb = el("input");
     cb.type = "checkbox";
     cb.value = u.uid;
-    label.append(img, el("span", "", u.name || u.email), cb);
+    label.append(img, el("span", "", u.name || "ব্যবহারকারী"), cb);
     box.append(label);
   });
   $("sheet").hidden = false;
