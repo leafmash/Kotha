@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserPopupRedirectResolver, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getMessaging, getToken, isSupported } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
+import { createCalls } from "./call.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, query, orderBy, where, limit, serverTimestamp, arrayUnion, arrayRemove, increment, writeBatch, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -294,6 +295,7 @@ onAuthStateChanged(auth, async user => {
   unsubs.forEach(u => u());
   unsubs = [];
   if (!user) {
+    calls.stop();
     users = new Map();
     chats = [];
     usersLoaded = false;
@@ -337,6 +339,7 @@ onAuthStateChanged(auth, async user => {
   }
   $("app").hidden = false;
   registerPush();
+  calls.start(user.uid);
   setPresence(true);
   unsubs.push(() => {
     userWatch.forEach(u => u());
@@ -671,6 +674,7 @@ function openChatById(id) {
 function renderPeer() {
   if (!active) return;
   if (active.group) {
+    $("hcalls").hidden = true;
     const g = active.data || {};
     const typers = Object.entries(g.typing || {}).filter(([k, v]) => v && k !== auth.currentUser.uid).map(([k]) => users.get(k)?.name).filter(Boolean);
     $("peerImg").src = pic({ name: g.name, photo: g.photo });
@@ -682,6 +686,7 @@ function renderPeer() {
   }
   const peer = users.get(active.peer);
   if (!peer) return;
+  $("hcalls").hidden = false;
   $("peerImg").src = pic(peer);
   $("peerAv").className = "av" + (peer.online ? " online" : "");
   $("peerName").textContent = peer.name || "";
@@ -1390,6 +1395,18 @@ $("sheetDone").onclick = async () => {
   $("sheet").hidden = true;
   openChat(null, { id: ref.id, name, members });
 };
+
+const calls = createCalls({
+  auth,
+  db,
+  fs: { collection, doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, query, where, serverTimestamp },
+  $,
+  toast,
+  pic,
+  getActive: () => active,
+  getUsers: () => users,
+  send
+});
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
