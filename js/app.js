@@ -60,6 +60,7 @@ const icons = {
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   checks: '<path d="M2 12.5l4.5 4.5L15 8M10 15.5l1.5 1.5L21 7.5"/>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
   logout: '<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/>'
 };
 const icon = (name, cls) => {
@@ -328,9 +329,57 @@ function watchUser(id) {
   }));
 }
 
+function renderFind() {
+  const box = $("findResult");
+  box.replaceChildren();
+  const term = $("findInput").value.trim().toLowerCase();
+  const s = searchState;
+  if (!term) return;
+  if (!emailRe.test(term)) {
+    box.append(el("p", "hint", "পুরো ইমেইল ঠিকানা লিখুন, যেমন name@example.com"));
+  } else if (s.term !== term || s.status === "idle" || s.status === "loading") {
+    box.append(el("p", "hint", "খোঁজা হচ্ছে…"));
+  } else if (s.status === "found") {
+    box.append(row(s.user, term, "", 0, () => {
+      closeFind();
+      openChat(s.user);
+    }));
+  } else if (s.status === "self") {
+    box.append(el("p", "hint", "এটি আপনার নিজের ইমেইল।"));
+  } else if (s.status === "error") {
+    box.append(el("p", "hint", "খুঁজতে সমস্যা হয়েছে, আবার চেষ্টা করুন।"));
+  } else {
+    box.append(el("p", "hint", "এই ইমেইলে কাউকে পাওয়া যায়নি।"));
+  }
+}
+
+function closeFind() {
+  $("findSheet").hidden = true;
+  $("findInput").value = "";
+  $("findResult").replaceChildren();
+  clearTimeout(searchTimer);
+  searchState = { term: "", status: "idle", user: null };
+}
+
+$("addBtn").onclick = () => {
+  $("findInput").value = "";
+  $("findResult").replaceChildren();
+  $("findSheet").hidden = false;
+  $("findInput").focus();
+};
+$("findClose").onclick = closeFind;
+$("findSheet").onclick = e => { if (e.target === $("findSheet")) closeFind(); };
+$("findInput").oninput = () => {
+  clearTimeout(searchTimer);
+  const term = $("findInput").value.trim().toLowerCase();
+  if (emailRe.test(term)) searchTimer = setTimeout(() => runSearch(term), 300);
+  else searchState = { term, status: "idle", user: null };
+  renderFind();
+};
+
 async function runSearch(term) {
   searchState = { term, status: "loading", user: null };
-  renderList();
+  renderFind();
   let next = { term, status: "none", user: null };
   try {
     const hit = await getDoc(doc(db, "emailLookup", term));
@@ -352,7 +401,7 @@ async function runSearch(term) {
     next.status = "error";
   }
   searchState = next;
-  renderList();
+  renderFind();
 }
 
 function renderMe() {
@@ -402,61 +451,57 @@ function renderList() {
   if (!auth.currentUser) return;
   const uid = auth.currentUser.uid;
   const term = $("search").value.trim().toLowerCase();
+  const hit = name => !term || (name || "").toLowerCase().includes(term);
   const totalUnread = chats.reduce((n, c) => n + (c.unread?.[uid] || 0), 0);
   document.title = (totalUnread ? `(${totalUnread}) ` : "") + "কথা";
   $("railBadge").hidden = !totalUnread;
   $("railBadge").textContent = totalUnread > 99 ? "99+" : totalUnread;
+  $("tabBadge").hidden = !totalUnread;
+  $("tabBadge").textContent = totalUnread > 99 ? "99+" : totalUnread;
 
-  if (term) {
-    const s = searchState;
-    if (!emailRe.test(term)) {
-      list.append(el("p", "hint", "কাউকে খুঁজতে তার পুরো ইমেইল ঠিকানা লিখুন, যেমন name@example.com"));
-    } else if (s.term !== term || s.status === "idle" || s.status === "loading") {
-      list.append(el("p", "hint", "খোঁজা হচ্ছে…"));
-    } else if (s.status === "found") {
-      list.append(row(s.user, term, "", 0, () => {
-        $("search").value = "";
-        searchState = { term: "", status: "idle", user: null };
-        openChat(s.user);
-      }));
-    } else if (s.status === "self") {
-      list.append(el("p", "hint", "এটি আপনার নিজের ইমেইল।"));
-    } else if (s.status === "error") {
-      list.append(el("p", "hint", "খুঁজতে সমস্যা হয়েছে, আবার চেষ্টা করুন।"));
-    } else {
-      list.append(el("p", "hint", "এই ইমেইলে কাউকে পাওয়া যায়নি।"));
-    }
-    return;
+  if (filter === "group" && !term) {
+    const r = el("div", "row newgroup");
+    const av = el("div", "av");
+    const ic = el("div", "ngicon");
+    ic.append(icon("plus"));
+    av.append(ic);
+    const body = el("div", "body");
+    body.append(el("b", "", "নতুন গ্রুপ তৈরি করুন"), el("span", "sub", "চ্যাটে থাকা বন্ধুদের নিয়ে গ্রুপ খুলুন"));
+    r.append(av, body);
+    r.onclick = openGroupSheet;
+    list.append(r);
   }
 
-  const talked = new Set();
+  let count = 0;
   [...chats]
     .filter(c => c.lastMessage)
     .filter(c => filter === "all" || (filter === "group" ? c.group : (c.unread?.[uid] || 0) > 0))
     .sort((a, b) => (b.lastAt?.seconds || 0) - (a.lastAt?.seconds || 0))
     .forEach(c => {
       if (c.group) {
+        if (!hit(c.name)) return;
         const g = { uid: c.id, name: c.name, photo: c.photo || "" };
         const who = c.lastFrom === uid ? "আপনি: " : (users.get(c.lastFrom)?.name || "") + ": ";
         list.append(row(g, who + c.lastMessage, listTime(c.lastAt), c.unread?.[uid] || 0, () => openChat(null, c), active?.id === c.id));
+        count++;
         return;
       }
       const peer = users.get(c.members.find(m => m !== uid));
-      if (!peer) return;
-      talked.add(peer.uid);
+      if (!peer || !hit(peer.name)) return;
       const sub = (c.lastFrom === uid ? "আপনি: " : "") + c.lastMessage;
       list.append(row(peer, sub, listTime(c.lastAt), c.unread?.[uid] || 0, () => openChat(peer), active?.peer === peer.uid));
+      count++;
     });
 
-  if (!list.children.length) list.append(el("p", "hint", filter === "all" ? "কথা শুরু করতে উপরের সার্চ বক্সে বন্ধুর পুরো ইমেইল ঠিকানা লিখুন।" : "কোনো চ্যাট নেই।"));
+  if (count) return;
+  let msg;
+  if (term) msg = "এই নামে কোনো কথোপকথন পাওয়া যায়নি।";
+  else if (filter === "group") msg = "এখনও কোনো গ্রুপ নেই।";
+  else if (filter === "unread") msg = "কোনো অপঠিত মেসেজ নেই।";
+  else msg = "এখনও কোনো চ্যাট নেই। উপরের নতুন মেম্বার আইকনে চেপে ইমেইল দিয়ে কাউকে খুঁজে কথা শুরু করুন।";
+  list.append(el("p", "hint", msg));
 }
-$("search").oninput = () => {
-  clearTimeout(searchTimer);
-  const term = $("search").value.trim().toLowerCase();
-  if (emailRe.test(term)) searchTimer = setTimeout(() => runSearch(term), 300);
-  else searchState = { term, status: "idle", user: null };
-  renderList();
-};
+$("search").oninput = renderList;
 $("chips").onclick = e => {
   const b = e.target.closest("button");
   if (!b) return;
@@ -468,7 +513,18 @@ $("chips").onclick = e => {
 function syncFilterUi() {
   $("chips").querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.f === filter));
   document.querySelectorAll("#rail [data-f]").forEach(x => x.classList.toggle("on", x.dataset.f === filter));
+  document.querySelectorAll("#tabs [data-f]").forEach(x => x.classList.toggle("on", x.dataset.f === (filter === "group" ? "group" : "all")));
+  $("chips").hidden = filter === "group";
+  document.querySelector(".dtitle").textContent = filter === "group" ? "গ্রুপ" : "চ্যাট";
 }
+
+document.querySelectorAll("#tabs [data-f]").forEach(b => {
+  b.onclick = () => {
+    filter = b.dataset.f;
+    syncFilterUi();
+    renderList();
+  };
+});
 
 document.querySelectorAll("#rail [data-f]").forEach(b => {
   b.onclick = () => {
@@ -1100,7 +1156,7 @@ $("messages").onscroll = () => {
 };
 $("fab").onclick = () => $("messages").scrollTo({ top: $("messages").scrollHeight, behavior: "smooth" });
 
-$("groupBtn").onclick = () => {
+const openGroupSheet = () => {
   $("groupName").value = "";
   const box = $("members");
   box.replaceChildren();
@@ -1147,6 +1203,7 @@ document.addEventListener("keydown", e => {
   }
   if (e.key !== "Escape") return;
   if (!$("lightbox").hidden) $("lightbox").hidden = true;
+  else if (!$("findSheet").hidden) closeFind();
   else if (!$("sheet").hidden) $("sheet").hidden = true;
   else if (!$("emojiPanel").hidden) $("emojiPanel").hidden = true;
   else if (active) closeChat();
