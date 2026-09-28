@@ -313,7 +313,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .hcalls[hidden]{display:none}
 #pane header .hcalls button{width:42px;height:42px}
 #pane header .hcalls button:active{background:var(--fill)}
-#call{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:space-between;background:radial-gradient(120% 90% at 50% 0%,#2a2470 0%,#0d0f1c 70%);color:#fff;padding:max(48px,calc(env(safe-area-inset-top) + 24px)) 24px max(28px,calc(env(safe-area-inset-bottom) + 28px));overflow:hidden;animation:fadeIn .18s ease}
+#call{position:fixed;inset:0;height:100dvh;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;background:radial-gradient(120% 90% at 50% 0%,#2a2470 0%,#0d0f1c 70%);color:#fff;padding:max(48px,calc(env(safe-area-inset-top) + 24px)) 24px max(28px,calc(env(safe-area-inset-bottom) + 28px));overflow:hidden;animation:fadeIn .18s ease}
 #call[hidden]{display:none}
 #call video{background:#000}
 #callTap{position:absolute;inset:0;z-index:0}
@@ -325,8 +325,6 @@ input,textarea{-webkit-user-select:text;user-select:text}
 #localVideo{width:100%;height:100%;object-fit:cover;border-radius:18px;border:2px solid rgba(255,255,255,.35);transform:scaleX(-1);display:block}
 #localVideo.back{transform:none}
 #localVideo.off{opacity:.18}
-#callFlip{position:absolute;right:6px;bottom:6px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.5);display:grid;place-items:center;color:#fff}
-#callFlip svg{width:14px;height:14px;stroke-width:2.4}
 #call .cinfo{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:6vh;text-align:center;text-shadow:0 1px 8px rgba(0,0,0,.45);transition:opacity .25s}
 #call .cav{width:132px;height:132px;border-radius:50%;overflow:hidden;box-shadow:0 0 0 6px rgba(255,255,255,.1)}
 #call.ring .cav{animation:ringPulse 1.6s ease-out infinite}
@@ -338,22 +336,27 @@ input,textarea{-webkit-user-select:text;user-select:text}
 #call.vid .cinfo b{font-size:18px}
 #call.vid .cinfo small{font-size:14px}
 #call.hide-ui .cctrl,#call.hide-ui .cinfo{opacity:0;pointer-events:none}
-#call .cbar{position:relative;z-index:2;display:flex;align-items:flex-start;justify-content:center;gap:22px;flex-wrap:wrap}
-#call .cbar[hidden]{display:none}
-#call .cctrl{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:28px}
-#call .cctrl[hidden]{display:none}
-#call .crow{display:flex;align-items:flex-start;justify-content:center;gap:20px}
-#call .cact{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12.5px;min-width:72px;opacity:.92}
-#call .cbtn{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.14);color:#fff;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:transform .12s,background .15s}
-#call .cbtn:active{transform:scale(.93)}
-#call .cbtn[hidden]{display:none}
+#call .cinfo,#call .cctrl{transition:opacity .25s}
+#call::before,#call::after{content:"";position:absolute;left:0;right:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .25s}
+#call::before{top:0;height:150px;background:linear-gradient(rgba(0,0,0,.55),transparent)}
+#call::after{bottom:0;height:200px;background:linear-gradient(transparent,rgba(0,0,0,.6))}
+#call.vid::before,#call.vid::after{opacity:1}
+#call.vid.hide-ui::before,#call.vid.hide-ui::after{opacity:0}
+#call .cbar,#call .cctrl{position:absolute;left:0;right:0;bottom:max(24px,calc(env(safe-area-inset-bottom) + 20px));margin:0 auto;z-index:2}
+#call .cbar{display:flex;align-items:flex-start;justify-content:center;gap:64px}
+#call .cact{display:flex;flex-direction:column;align-items:center;gap:10px;font-size:13px;min-width:84px;opacity:.95}
+#call .cctrl{display:flex;align-items:center;justify-content:center;gap:clamp(8px,2.6vw,14px);width:min(calc(100% - 32px),400px);padding:12px clamp(10px,3vw,16px);border-radius:40px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);box-shadow:0 12px 36px rgba(0,0,0,.35)}
+#call .cbtn{flex:none;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.16);color:#fff;transition:transform .12s,background .15s,color .15s,opacity .15s}
+#call .cctrl .cbtn{width:clamp(48px,14vw,56px);height:clamp(48px,14vw,56px)}
+#call .cbtn:active{transform:scale(.92)}
 #call .cbtn svg{width:24px;height:24px;stroke-width:2}
-#call .cbtn.end{background:var(--danger)}
-#call .cbtn.end.big{width:70px;height:70px;box-shadow:0 8px 22px rgba(255,93,115,.4)}
-#call .cbtn.end.big svg{width:28px;height:28px}
-#call .cbtn.ok{background:var(--ok)}
-#call .cbtn.off{background:#fff;color:#111}
-#call .cbtn.on{background:#fff;color:#111}
+#call .cbtn.big{width:72px;height:72px}
+#call .cbtn.big svg{width:30px;height:30px}
+#call .cbtn.end{background:var(--danger);box-shadow:0 6px 18px rgba(255,93,115,.4)}
+#call .cbtn.end svg{transform:rotate(135deg)}
+#call .cbtn.ok{background:var(--ok);box-shadow:0 6px 18px rgba(61,220,151,.4)}
+#call .cbtn.off,#call .cbtn.on{background:#fff;color:#111}
+#call .cbtn.dim{opacity:.45}
 #call .cbtn .slash{display:none}
 #call .cbtn.off .slash{display:block}
 @keyframes ringPulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.35)}100%{box-shadow:0 0 0 34px rgba(255,255,255,0)}}
