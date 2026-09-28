@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0f1c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<title>কথা</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem("theme")||"dark"</script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="splash">
+  <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 3C6.5 3 2 6.8 2 11.5c0 2.4 1.2 4.6 3.1 6.1L4 21l3.9-1.9c1.3.5 2.7.8 4.1.8 5.5 0 10-3.8 10-8.5S17.5 3 12 3z"/></svg></div>
+  <div class="spin"></div>
+</div>
+<section id="auth">
+  <div class="auth-card">
+    <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 3C6.5 3 2 6.8 2 11.5c0 2.4 1.2 4.6 3.1 6.1L4 21l3.9-1.9c1.3.5 2.7.8 4.1.8 5.5 0 10-3.8 10-8.5S17.5 3 12 3z"/></svg></div>
+    <h1 class="brand">কথা</h1>
+    <p class="tag">আপনার ইমেইল দিয়ে সাইন ইন করে কথা শুরু করুন।</p>
+    <form id="authForm">
+      <input id="name" placeholder="আপনার নাম" autocomplete="name" hidden>
+      <input id="email" type="email" placeholder="ইমেইল" autocomplete="email" required>
+      <input id="password" type="password" placeholder="পাসওয়ার্ড" minlength="6" autocomplete="current-password" required>
+      <button class="primary" id="authBtn">সাইন ইন করুন</button>
+    </form>
+    <button class="ghost" id="googleBtn">Google দিয়ে চালিয়ে যান</button>
+    <p class="switch"><span id="switchText">নতুন ব্যবহারকারী?</span> <a href="#" id="switchLink">অ্যাকাউন্ট খুলুন</a></p>
+    <p class="err" id="authErr"></p>
+  </div>
+</section>
+
+<script>(function(){var s=localStorage.getItem("kotha-session")==="1";document.getElementById("splash").hidden=!s;document.getElementById("auth").hidden=s})()</script>
+
+<main id="app" hidden>
+  <nav id="rail">
+    <div class="rail-top">
+      <button class="rbtn on" data-f="all" title="চ্যাট"><svg viewBox="0 0 24 24"><path d="M12 3C6.5 3 2 6.8 2 11.5c0 2.4 1.2 4.6 3.1 6.1L4 21l3.9-1.9c1.3.5 2.7.8 4.1.8 5.5 0 10-3.8 10-8.5S17.5 3 12 3z"/></svg><span class="rbadge" id="railBadge" hidden></span></button>
+      <button class="rbtn" data-f="group" title="গ্রুপ"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6 6 0 0 1 3.5 6"/></svg></button>
+    </div>
+    <div class="rail-bottom">
+      <button class="rbtn" id="railTheme" title="থিম"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 3a9 9 0 0 1 0 18z" class="fill"/></svg></button>
+      <button class="rbtn" id="railLogout" title="সাইন আউট"><svg viewBox="0 0 24 24"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/></svg></button>
+      <button class="rprofile" id="railMe" title="ছবি বদলান"><img id="railImg" alt=""></button>
+    </div>
+  </nav>
+  <aside id="sidebar">
+    <header>
+      <b class="dtitle">চ্যাট</b>
+      <div class="me" id="meBtn" title="ছবি বদলান"><img id="meImg" alt=""><b id="meName"></b></div>
+      <div class="actions">
+        <button id="groupBtn" title="নতুন গ্রুপ"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6 6 0 0 1 3.5 6"/></svg></button>
+        <button id="themeBtn" title="থিম"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" class="fill"/></svg></button>
+        <button id="logoutBtn" title="সাইন আউট"><svg viewBox="0 0 24 24"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/></svg></button>
+      </div>
+    </header>
+    <div class="search"><input id="search" type="search" placeholder="খুঁজুন"></div>
+    <div class="chips" id="chips"><button data-f="all" class="on">সব</button><button data-f="unread">অপঠিত</button><button data-f="group">গ্রুপ</button></div>
+    <div id="list"></div>
+  </aside>
+
+  <section id="chat">
+    <div id="empty">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 3C6.5 3 2 6.8 2 11.5c0 2.4 1.2 4.6 3.1 6.1L4 21l3.9-1.9c1.3.5 2.7.8 4.1.8 5.5 0 10-3.8 10-8.5S17.5 3 12 3z"/></svg></div>
+      <h2>কথা</h2>
+      <p>বামের তালিকা থেকে একটি চ্যাট বেছে নিন</p>
+    </div>
+    <div id="pane" hidden>
+      <header>
+        <button id="backBtn" title="ফিরে যান"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <div class="av" id="peerAv"><img id="peerImg" alt=""></div>
+        <div class="who"><b id="peerName"></b><small id="peerStatus"></small></div>
+      </header>
+      <div id="messages"></div>
+      <button id="fab" hidden title="নিচে যান"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div id="replyBar" hidden><div><small>উত্তর দিচ্ছেন</small><p id="replyText"></p></div><button id="replyCancel" title="বাতিল"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <div id="emojiPanel" hidden></div>
+      <footer>
+        <button id="emojiBtn" title="ইমোজি"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg></button>
+        <button id="attachBtn" title="ফাইল"><svg viewBox="0 0 24 24"><path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.5 3.5 0 0 1 5 5L10 17.5a2 2 0 0 1-3-3l7.5-7.5"/></svg></button>
+        <textarea id="input" rows="1" placeholder="মেসেজ"></textarea>
+        <div id="rec"><i></i><span id="recTime">0:00</span><button id="recCancel" title="বাতিল"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <button id="micBtn" title="ভয়েস মেসেজ"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+        <button id="sendBtn" class="send" hidden title="পাঠান"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+      </footer>
+    </div>
+  </section>
+</main>
+
+<div id="sheet" hidden>
+  <div class="panel">
+    <header><button id="sheetClose" title="বন্ধ করুন"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><b>নতুন গ্রুপ</b><button id="sheetDone" class="text">তৈরি করুন</button></header>
+    <input id="groupName" placeholder="গ্রুপের নাম">
+    <div id="members"></div>
+  </div>
+</div>
+<div id="lightbox" hidden><img alt=""></div>
+<div id="toast"></div>
+<input type="file" id="fileInput" hidden>
+<input type="file" id="avatarInput" accept="image/*" hidden>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
