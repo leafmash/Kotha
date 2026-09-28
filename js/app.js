@@ -525,7 +525,7 @@ async function openChat(peer, group) {
   listenMessages();
   input.value = drafts.get(id) || "";
   syncComposer();
-  input.focus();
+  input.blur();
 }
 
 function listenMessages() {
@@ -693,8 +693,16 @@ function renderMessages(all) {
   }
 }
 
+async function hideForMe(d) {
+  await updateDoc(d.ref, { hiddenFor: arrayUnion(auth.currentUser.uid) });
+}
+
 async function removeMessage(d) {
   const uid = auth.currentUser.uid;
+  if (d.data().deleted) {
+    await hideForMe(d);
+    return;
+  }
   const mine = d.data().from === uid;
   const options = [];
   if (mine) options.push({ label: "সবার জন্য মুছুন", value: "all", kind: "dok" });
@@ -708,7 +716,7 @@ async function removeMessage(d) {
   });
   if (!choice) return;
   if (choice === "me") {
-    await updateDoc(d.ref, { hiddenFor: arrayUnion(uid) });
+    await hideForMe(d);
     return;
   }
   const chatId = active.id;
@@ -745,21 +753,33 @@ function openMenu(d, m, mine) {
     });
   }
   reacts.hidden = !!m.deleted;
-  $("menuPreview").textContent = preview(m);
+
+  const prev = $("menuPreview");
+  prev.className = "mbubble " + (mine ? "mine" : "theirs") + (m.deleted ? " gone" : "");
+  const body = el("p", "", m.deleted ? "মেসেজ মুছে ফেলা হয়েছে" : preview(m));
+  const time = el("small", "", (mine ? "আপনি" : users.get(m.from)?.name || "") + (m.at ? " · " + clock(m.at) : ""));
+  prev.replaceChildren(body, time);
+
   const items = [];
-  const item = (name, label, fn, danger) => {
-    const b = el("button", danger ? "danger" : "");
-    b.append(icon(name), el("span", "", label));
+  const tile = (name, label, fn, danger) => {
+    const b = el("button", "tile" + (danger ? " danger" : ""));
+    const wrap = el("span", "tico");
+    wrap.append(icon(name));
+    b.append(wrap, el("span", "tlabel", label));
     b.onclick = () => { closeMenu(); fn(); };
     items.push(b);
   };
-  if (!m.deleted) {
-    item("reply", "উত্তর দিন", () => setReply(preview(m), d.id));
+  if (m.deleted) {
+    tile("trash", "আমার জন্য মুছুন", () => hideForMe(d), true);
+  } else {
+    tile("reply", "উত্তর দিন", () => setReply(preview(m), d.id));
     const copyable = m.type === "text" || !m.type ? m.text : m.url;
-    if (copyable) item("copy", "কপি করুন", () => copyText(copyable));
+    if (copyable) tile("copy", "কপি করুন", () => copyText(copyable));
+    tile("trash", "মুছুন", () => removeMessage(d), true);
   }
-  item("trash", "মুছুন", () => removeMessage(d), true);
-  $("menuItems").replaceChildren(...items);
+  const grid = $("menuItems");
+  grid.style.setProperty("--n", items.length);
+  grid.replaceChildren(...items);
   menuBox.hidden = false;
 }
 
@@ -797,10 +817,11 @@ function attachGestures(b, d, m, mine) {
     const mx = e.clientX - sx;
     const my = e.clientY - sy;
     if (!swiping && (Math.abs(mx) > 10 || Math.abs(my) > 10)) cancelPress();
-    if (!swiping && mx > 12 && mx > Math.abs(my) * 1.4 && !m.deleted) swiping = true;
+    const dir = mine ? -1 : 1;
+    if (!swiping && mx * dir > 12 && Math.abs(mx) > Math.abs(my) * 1.4 && !m.deleted) swiping = true;
     if (!swiping) return;
-    dx = Math.max(0, Math.min(mx, 90));
-    b.style.transform = `translateX(${dx}px)`;
+    dx = Math.max(0, Math.min(mx * dir, 90));
+    b.style.transform = `translateX(${dx * dir}px)`;
     ico.style.opacity = Math.min(1, dx / 60);
     ico.classList.toggle("ready", dx >= 60);
   });
