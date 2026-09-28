@@ -15,7 +15,7 @@ const mediaError = err => {
   return "কল শুরু করা যায়নি";
 };
 
-export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, send }) {
+export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, send, askChoice }) {
   const { collection, doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, query, where, serverTimestamp } = fs;
 
   let call = null;
@@ -23,6 +23,8 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
   let iceCache = null;
   let audioCtx = null;
   let toneTimer = null;
+  let hideTimer = null;
+  let drag = null;
 
   const myUid = () => auth.currentUser?.uid || "";
 
@@ -141,7 +143,22 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
   function layout(c) {
     const rv = !!c.remote && c.remote.getVideoTracks().length > 0 && !c.peerCamOff;
     $("call").classList.toggle("vid", rv && c.connected);
-    $("localVideo").hidden = !(c.video && c.local && c.local.getVideoTracks().length);
+    $("localWrap").hidden = !(c.video && c.local && c.local.getVideoTracks().length);
+    if (!c.video || !c.connected) stopHideTimer();
+  }
+
+  function stopHideTimer() {
+    clearTimeout(hideTimer);
+    hideTimer = null;
+    $("call").classList.remove("hide-ui");
+  }
+
+  function armHideTimer(c) {
+    clearTimeout(hideTimer);
+    if (!c.video || !c.connected) return;
+    hideTimer = setTimeout(() => {
+      if (call === c && c.connected) $("call").classList.add("hide-ui");
+    }, 4000);
   }
 
   function showCall(c, text) {
@@ -158,17 +175,23 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     $("callIn").hidden = c.dir !== "in";
     $("callBar").hidden = c.dir === "in";
     $("callCam").hidden = !c.video;
+    $("callSpeaker").hidden = true;
     $("callFlip").hidden = true;
+    setLocalPos(16, 16);
     $("callMute").classList.remove("off");
     $("callCam").classList.remove("off");
+    $("callSpeaker").classList.remove("on");
     $("localVideo").classList.remove("off", "back");
     $("localVideo").srcObject = null;
     $("remoteVideo").srcObject = null;
-    $("localVideo").hidden = true;
+    $("localWrap").hidden = true;
     box.hidden = false;
+    stopHideTimer();
+    setupSpeaker();
   }
 
   const hideCall = () => {
+    stopHideTimer();
     $("call").hidden = true;
     $("localVideo").srcObject = null;
     $("remoteVideo").srcObject = null;
@@ -250,6 +273,8 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
       if (!c.weak) setStatus(fmt(Math.floor((Date.now() - c.startedAt) / 1000)));
     }, 1000);
     layout(c);
+    armHideTimer(c);
+    if (navigator.vibrate) navigator.vibrate(60);
   }
 
   function makePeer(c, stream, ice) {
@@ -521,6 +546,104 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     if (c.created && c.ref) updateDoc(c.ref, { ["cam." + myUid()]: on }).catch(() => {});
   }
 
+  const outLabel = d => {
+    const l = (d.label || "").toLowerCase();
+    if (/speaker/.test(l)) return "স্পিকার";
+    if (/earpiece|receiver/.test(l)) return "ইয়ারপিস";
+    if (/bluetooth/.test(l)) return "ব্লুটুথ";
+    if (/headphone|headset|wired/.test(l)) return "হেডফোন";
+    return d.label || "ডিফল্ট";
+  };
+
+  async function setupSpeaker() {
+    $("callSpeaker").hidden = true;
+    if (!("setSinkId" in HTMLMediaElement.prototype) || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    try {
+      const list = await navigator.mediaDevices.enumerateDevices();
+      const outs = list.filter(d => d.kind === "audiooutput" && d.deviceId);
+      if (call && outs.length > 1) $("callSpeaker").hidden = false;
+    } catch {
+      return;
+    }
+  }
+
+  async function pickSpeaker() {
+    if (!call || !askChoice) return;
+    let outs;
+    try {
+      const list = await navigator.mediaDevices.enumerateDevices();
+      outs = list.filter(d => d.kind === "audiooutput" && d.deviceId);
+    } catch {
+      return;
+    }
+    if (!outs.length) return;
+    const value = await askChoice({
+      title: "অডিও আউটপুট",
+      text: "কল যেখান থেকে শুনবেন সেটা বেছে নিন",
+      iconName: "users",
+      options: [
+        ...outs.map(d => ({ label: outLabel(d), value: d.deviceId, kind: "dcancel" })),
+        { label: "বাতিল", value: "", kind: "dcancel" }
+      ]
+    });
+    if (!value || !call) return;
+    try {
+      await $("remoteVideo").setSinkId(value);
+      const speakerLike = outs.find(d => d.deviceId === value && /speaker/i.test(d.label || ""));
+      $("callSpeaker").classList.toggle("on", !!speakerLike);
+    } catch {
+      toast("অডিও আউটপুট বদলানো যায়নি");
+    }
+  }
+
+  function setLocalPos(top, right) {
+    const wrap = $("localWrap");
+    wrap.style.top = "max(" + top + "px, calc(env(safe-area-inset-top) + " + top + "px))";
+    wrap.style.right = right + "px";
+    wrap.style.left = "";
+    wrap.style.bottom = "";
+  }
+
+  function initDrag() {
+    const wrap = $("localWrap");
+    let sx = 0;
+    let sy = 0;
+    let ox = 0;
+    let oy = 0;
+    wrap.addEventListener("pointerdown", e => {
+      if (e.target.closest("#callFlip")) return;
+      wrap.setPointerCapture(e.pointerId);
+      const r = wrap.getBoundingClientRect();
+      ox = r.left;
+      oy = r.top;
+      sx = e.clientX;
+      sy = e.clientY;
+      drag = { id: e.pointerId, moved: false };
+      wrap.classList.add("drag");
+    });
+    wrap.addEventListener("pointermove", e => {
+      if (!drag || drag.id !== e.pointerId) return;
+      const dx = e.clientX - sx;
+      const dy = e.clientY - sy;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) drag.moved = true;
+      const w = wrap.offsetWidth;
+      const h = wrap.offsetHeight;
+      const x = Math.min(Math.max(ox + dx, 8), innerWidth - w - 8);
+      const y = Math.min(Math.max(oy + dy, 8), innerHeight - h - 8);
+      wrap.style.left = x + "px";
+      wrap.style.top = y + "px";
+      wrap.style.right = "";
+      wrap.style.bottom = "";
+    });
+    const end = e => {
+      if (!drag || drag.id !== e.pointerId) return;
+      wrap.classList.remove("drag");
+      drag = null;
+    };
+    wrap.addEventListener("pointerup", end);
+    wrap.addEventListener("pointercancel", end);
+  }
+
   async function flipCam() {
     const c = call;
     if (!c || !c.local || !c.pc) return;
@@ -604,6 +727,15 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
   $("callMute").onclick = toggleMute;
   $("callCam").onclick = toggleCam;
   $("callFlip").onclick = flipCam;
+  $("callSpeaker").onclick = pickSpeaker;
+  initDrag();
+  const wakeUi = () => {
+    if (!call || !call.video || !call.connected) return;
+    stopHideTimer();
+    armHideTimer(call);
+  };
+  $("callTap").addEventListener("click", wakeUi);
+  $("remoteVideo").addEventListener("click", wakeUi);
   addEventListener("pagehide", () => {
     if (call && call.created && !call.ended) hangup("ended");
   });

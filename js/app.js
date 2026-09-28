@@ -1405,7 +1405,8 @@ const calls = createCalls({
   pic,
   getActive: () => active,
   getUsers: () => users,
-  send
+  send,
+  askChoice
 });
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
