@@ -19,7 +19,7 @@
       ]
     },
     {
-      "source": "/(index.html|app.js|style.css)",
+      "source": "/(index.html|js/app.js|js/call.js|css/style.css)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]

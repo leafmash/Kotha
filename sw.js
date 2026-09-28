@@ -1,5 +1,5 @@
-const CACHE = "kotha-v17";
-const SHELL = ["./", "index.html", "style.css", "app.js", "icon.svg", "icon-192.png"];
+const CACHE = "kotha-v18";
+const SHELL = ["./", "index.html", "css/style.css", "js/app.js", "js/call.js", "icon.svg", "icon-192.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -38,12 +38,15 @@ self.addEventListener("push", e => {
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
       if (list.some(c => c.visibilityState === "visible" && c.focused)) return;
+      const isCall = d.type === "call";
       return self.registration.showNotification(d.title || "কথা", {
         body: d.body || "",
         icon: "icon-192.png",
         badge: "icon-192.png",
-        tag: d.chatId || "kotha",
+        tag: isCall ? "call-" + (d.chatId || "") : d.chatId || "kotha",
         renotify: true,
+        requireInteraction: isCall,
+        vibrate: isCall ? [400, 200, 400, 200, 400] : undefined,
         data: { chatId: d.chatId || "" }
       });
     })
