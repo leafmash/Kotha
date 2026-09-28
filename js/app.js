@@ -61,7 +61,12 @@ const icons = {
   checks: '<path d="M2 12.5l4.5 4.5L15 8M10 15.5l1.5 1.5L21 7.5"/>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
-  logout: '<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/>'
+  logout: '<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6 6 0 0 1 3.5 6"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  camera: '<path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>'
 };
 const icon = (name, cls) => {
   const s = el("span", "ico" + (cls ? " " + cls : ""));
@@ -126,6 +131,7 @@ addEventListener("keydown", e => {
   closeConfirm(false);
   closeChoice(null);
   closeMenu();
+  closeMore();
 });
 
 let toastTimer;
@@ -157,6 +163,8 @@ let splashTimer;
 let filter = "all";
 const drafts = new Map();
 const lastAtSeen = new Map();
+const goneCache = new Map();
+const unreadOf = (c, uid) => active?.id === c.id && !document.hidden ? 0 : (c.unread?.[uid] || 0);
 
 const hadSession = localStorage.getItem("kotha-session") === "1";
 const hideSplash = () => {
@@ -178,11 +186,42 @@ const checkReady = () => {
 };
 if (hadSession) showSplash();
 
-$("themeBtn").onclick = () => {
+const toggleTheme = () => {
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
   localStorage.setItem("theme", next);
 };
+
+const moreMenu = $("moreMenu");
+function closeMore() {
+  moreMenu.hidden = true;
+  $("menuBtn").setAttribute("aria-expanded", "false");
+}
+function openMore() {
+  const dark = document.documentElement.dataset.theme === "dark";
+  const items = [
+    { icon: "users", label: "নতুন গ্রুপ", fn: () => openGroupSheet() },
+    { icon: "camera", label: "প্রোফাইল ছবি বদলান", fn: () => $("avatarInput").click() },
+    { icon: dark ? "sun" : "moon", label: dark ? "লাইট মোড" : "ডার্ক মোড", fn: toggleTheme },
+    { icon: "logout", label: "সাইন আউট", fn: () => logout(), danger: true }
+  ];
+  moreMenu.replaceChildren(...items.map(it => {
+    const b = el("button", "mi" + (it.danger ? " danger" : ""));
+    b.setAttribute("role", "menuitem");
+    b.append(icon(it.icon), el("span", "", it.label));
+    b.onclick = () => {
+      closeMore();
+      it.fn();
+    };
+    return b;
+  }));
+  moreMenu.hidden = false;
+  $("menuBtn").setAttribute("aria-expanded", "true");
+}
+$("menuBtn").onclick = () => moreMenu.hidden ? openMore() : closeMore();
+document.addEventListener("click", e => {
+  if (!moreMenu.hidden && !e.target.closest("#moreMenu, #menuBtn")) closeMore();
+});
 
 $("switchLink").onclick = e => {
   e.preventDefault();
@@ -225,19 +264,30 @@ $("googleBtn").onclick = async () => {
   }
 };
 
-$("logoutBtn").onclick = async () => {
+async function logout() {
   const ok = await askConfirm({ title: "সাইন আউট করবেন?", text: "আপনি এই ডিভাইস থেকে সাইন আউট হয়ে যাবেন। আবার সাইন ইন করে চ্যাটে ফিরতে পারবেন।", ok: "সাইন আউট", iconName: "logout" });
   if (!ok) return;
   await unregisterPush();
   await setPresence(false);
   await signOut(auth);
-};
+}
 
 const setPresence = on => auth.currentUser
   ? updateDoc(doc(db, "users", auth.currentUser.uid), { online: on, lastSeen: serverTimestamp() }).catch(() => {})
   : Promise.resolve();
 
-document.addEventListener("visibilitychange", () => setPresence(!document.hidden));
+document.addEventListener("visibilitychange", () => {
+  setPresence(!document.hidden);
+  markRead();
+  renderList();
+});
+
+function markRead() {
+  if (!active || document.hidden || !auth.currentUser) return;
+  const uid = auth.currentUser.uid;
+  if (!active.data?.unread?.[uid]) return;
+  setDoc(doc(db, "chats", active.id), { unread: { [uid]: 0 } }, { merge: true }).catch(() => {});
+}
 addEventListener("beforeunload", () => setPresence(false));
 
 onAuthStateChanged(auth, async user => {
@@ -249,6 +299,8 @@ onAuthStateChanged(auth, async user => {
     usersLoaded = false;
     chatsReady = false;
     lastAtSeen.clear();
+    goneCache.clear();
+    closeMore();
     closeChat();
     $("app").hidden = true;
     $("auth").hidden = false;
@@ -452,7 +504,7 @@ function renderList() {
   const uid = auth.currentUser.uid;
   const term = $("search").value.trim().toLowerCase();
   const hit = name => !term || (name || "").toLowerCase().includes(term);
-  const totalUnread = chats.reduce((n, c) => n + (c.unread?.[uid] || 0), 0);
+  const totalUnread = chats.reduce((n, c) => n + unreadOf(c, uid), 0);
   document.title = (totalUnread ? `(${totalUnread}) ` : "") + "কথা";
   $("railBadge").hidden = !totalUnread;
   $("railBadge").textContent = totalUnread > 99 ? "99+" : totalUnread;
@@ -475,21 +527,21 @@ function renderList() {
   let count = 0;
   [...chats]
     .filter(c => c.lastMessage)
-    .filter(c => filter === "all" || (filter === "group" ? c.group : (c.unread?.[uid] || 0) > 0))
+    .filter(c => filter === "all" || (filter === "group" ? c.group : unreadOf(c, uid) > 0))
     .sort((a, b) => (b.lastAt?.seconds || 0) - (a.lastAt?.seconds || 0))
     .forEach(c => {
       if (c.group) {
         if (!hit(c.name)) return;
         const g = { uid: c.id, name: c.name, photo: c.photo || "" };
         const who = c.lastFrom === uid ? "আপনি: " : (users.get(c.lastFrom)?.name || "") + ": ";
-        list.append(row(g, who + c.lastMessage, listTime(c.lastAt), c.unread?.[uid] || 0, () => openChat(null, c), active?.id === c.id));
+        list.append(row(g, who + c.lastMessage, listTime(c.lastAt), unreadOf(c, uid), () => openChat(null, c), active?.id === c.id));
         count++;
         return;
       }
       const peer = users.get(c.members.find(m => m !== uid));
       if (!peer || !hit(peer.name)) return;
       const sub = (c.lastFrom === uid ? "আপনি: " : "") + c.lastMessage;
-      list.append(row(peer, sub, listTime(c.lastAt), c.unread?.[uid] || 0, () => openChat(peer), active?.peer === peer.uid));
+      list.append(row(peer, sub, listTime(c.lastAt), unreadOf(c, uid), () => openChat(peer), active?.peer === peer.uid));
       count++;
     });
 
@@ -498,7 +550,7 @@ function renderList() {
   if (term) msg = "এই নামে কোনো কথোপকথন পাওয়া যায়নি।";
   else if (filter === "group") msg = "এখনও কোনো গ্রুপ নেই।";
   else if (filter === "unread") msg = "কোনো অপঠিত মেসেজ নেই।";
-  else msg = "এখনও কোনো চ্যাট নেই। উপরের নতুন মেম্বার আইকনে চেপে ইমেইল দিয়ে কাউকে খুঁজে কথা শুরু করুন।";
+  else msg = "এখনও কোনো চ্যাট নেই। উপরের কন্টাক্ট যোগ করার আইকনে চেপে ইমেইল দিয়ে কাউকে খুঁজে কথা শুরু করুন।";
   list.append(el("p", "hint", msg));
 }
 $("search").oninput = renderList;
@@ -533,8 +585,6 @@ document.querySelectorAll("#rail [data-f]").forEach(b => {
     renderList();
   };
 });
-$("railTheme").onclick = () => $("themeBtn").click();
-$("railLogout").onclick = () => $("logoutBtn").click();
 $("railMe").onclick = () => $("avatarInput").click();
 
 function closeChat() {
@@ -563,6 +613,7 @@ async function openChat(peer, group) {
   msgUnsub = null;
   const ref = doc(db, "chats", id);
   if (!group && !chats.some(c => c.id === id)) await setDoc(ref, { members: [uid, peer.uid] }, { merge: true });
+  goneCache.clear();
   active = { id, peer: group ? null : peer.uid, group: !!group, members: group ? group.members : [uid, peer.uid], reply: null, data: group || null, first: true, lastId: null, limit: PAGE, hasMore: false, olderLoad: false };
   $("empty").hidden = true;
   $("pane").hidden = false;
@@ -577,6 +628,8 @@ async function openChat(peer, group) {
     if (!active || active.id !== id) return;
     active.data = s.data();
     renderPeer();
+    markRead();
+    renderList();
   }));
   listenMessages();
   input.value = drafts.get(id) || "";
@@ -587,7 +640,6 @@ async function openChat(peer, group) {
 function listenMessages() {
   const target = active;
   const uid = auth.currentUser.uid;
-  const ref = doc(db, "chats", target.id);
   msgUnsub?.();
   msgUnsub = onSnapshot(query(collection(db, "chats", target.id, "messages"), orderBy("at", "desc"), limit(target.limit)), s => {
     if (active !== target) return;
@@ -599,7 +651,7 @@ function listenMessages() {
       unseen.forEach(d => batch.update(d.ref, { status: "seen" }));
       batch.commit().catch(() => {});
     }
-    if (target.data?.unread?.[uid]) setDoc(ref, { unread: { [uid]: 0 } }, { merge: true });
+    markRead();
   });
 }
 
@@ -644,6 +696,8 @@ function renderPeer() {
 function renderMessages(all) {
   const uid = auth.currentUser.uid;
   const docs = all.filter(d => !(d.data().hiddenFor || []).includes(uid));
+  const byId = new Map(all.map(d => [d.id, d.data()]));
+  if (active.reply?.id && byId.get(active.reply.id)?.deleted) clearReply();
   const box = $("messages");
   const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
   const prevHeight = box.scrollHeight;
@@ -670,15 +724,22 @@ function renderMessages(all) {
       sender.style.color = palette[[...m.from].reduce((a, ch) => a + ch.charCodeAt(0), 0) % palette.length];
       b.append(sender);
     }
-    if (m.replyTo && !m.deleted) {
+    const rid = m.replyTo?.id;
+    const inWindow = rid ? byId.get(rid) : null;
+    const quoteGone = rid ? (inWindow ? !!inWindow.deleted : goneCache.get(active.id + "/" + rid) === true) : false;
+    if (m.replyTo && !m.deleted && !quoteGone) {
       const q = el("div", "quote", m.replyTo.text);
-      if (m.replyTo.id) q.onclick = () => {
-        const t = $("m-" + m.replyTo.id);
-        if (!t) return;
-        t.scrollIntoView({ behavior: "smooth", block: "center" });
-        t.classList.add("flash");
-        setTimeout(() => t.classList.remove("flash"), 1300);
-      };
+      if (rid) {
+        q.dataset.reply = rid;
+        q.onclick = () => {
+          const t = $("m-" + rid);
+          if (!t) return;
+          t.scrollIntoView({ behavior: "smooth", block: "center" });
+          t.classList.add("flash");
+          setTimeout(() => t.classList.remove("flash"), 1300);
+        };
+        if (!inWindow && !goneCache.has(active.id + "/" + rid)) checkGone(active.id, rid);
+      }
       b.append(q);
     }
 
@@ -746,6 +807,19 @@ function renderMessages(all) {
   } else if (nearBottom || active.first) {
     box.scrollTop = box.scrollHeight;
     if (docs.length) active.first = false;
+  }
+}
+
+async function checkGone(chatId, rid) {
+  const key = chatId + "/" + rid;
+  goneCache.set(key, false);
+  try {
+    const s = await getDoc(doc(db, "chats", chatId, "messages", rid));
+    const gone = !s.exists() || !!s.data().deleted;
+    goneCache.set(key, gone);
+    if (gone && active?.id === chatId) document.querySelectorAll(`.quote[data-reply="${rid}"]`).forEach(q => q.remove());
+  } catch {
+    goneCache.delete(key);
   }
 }
 
@@ -1156,33 +1230,157 @@ $("messages").onscroll = () => {
 };
 $("fab").onclick = () => $("messages").scrollTo({ top: $("messages").scrollHeight, behavior: "smooth" });
 
-const openGroupSheet = () => {
-  $("groupName").value = "";
-  const box = $("members");
-  box.replaceChildren();
+let groupExtra = new Map();
+let groupPicked = new Set();
+let groupFindTimer;
+let groupFindToken = 0;
+const groupUser = id => users.get(id) || groupExtra.get(id);
+
+async function lookupEmail(term) {
+  try {
+    const hit = await getDoc(doc(db, "emailLookup", term));
+    if (!hit.exists()) return { status: "none" };
+    if (hit.data().uid === auth.currentUser.uid) return { status: "self" };
+    const p = await getDoc(doc(db, "users", hit.data().uid));
+    if (!p.exists()) return { status: "none" };
+    users.set(p.id, p.data());
+    watchUser(p.id);
+    return { status: "found", user: p.data() };
+  } catch {
+    return { status: "error" };
+  }
+}
+
+function groupContacts() {
   const me = auth.currentUser.uid;
-  const contacts = [...new Set(chats.filter(c => !c.group && c.lastMessage).map(c => c.members.find(m => m !== me)))]
-    .map(id => users.get(id))
-    .filter(Boolean);
-  if (!contacts.length) box.append(el("p", "hint", "গ্রুপে যোগ করতে আগে ইমেইল দিয়ে খুঁজে তাদের সাথে চ্যাট শুরু করুন।"));
-  contacts.forEach(u => {
-    const label = el("label", "pick");
+  const ids = new Set(chats.filter(c => !c.group).map(c => c.members.find(m => m !== me)));
+  groupExtra.forEach((u, id) => ids.add(id));
+  return [...ids].map(id => users.get(id) || groupExtra.get(id)).filter(Boolean);
+}
+
+let lastPicked = 0;
+
+function syncGroupUi() {
+  const strip = $("picked");
+  strip.replaceChildren();
+  groupPicked.forEach(id => {
+    const u = groupUser(id);
+    if (!u) return;
+    const pk = el("div", "pk");
     const img = el("img");
     img.src = pic(u);
     img.alt = "";
-    const cb = el("input");
-    cb.type = "checkbox";
-    cb.value = u.uid;
-    label.append(img, el("span", "", u.name || "ব্যবহারকারী"), cb);
-    box.append(label);
+    const x = el("i");
+    x.append(icon("close"));
+    pk.append(img, x, el("span", "", u.name || "ব্যবহারকারী"));
+    pk.onclick = () => {
+      groupPicked.delete(id);
+      renderMembers();
+    };
+    strip.append(pk);
   });
+  strip.hidden = !groupPicked.size;
+  $("pickedSec").hidden = !groupPicked.size;
+  if (groupPicked.size > lastPicked) requestAnimationFrame(() => strip.scrollTo({ left: strip.scrollWidth, behavior: "smooth" }));
+  lastPicked = groupPicked.size;
+  $("sheetCount").textContent = groupPicked.size ? groupPicked.size.toLocaleString("bn-BD") + " জন নির্বাচিত" : "মেম্বার বেছে নিন";
+  $("sheetDone").classList.toggle("off", !($("groupName").value.trim() && groupPicked.size));
+}
+
+function renderMembers() {
+  const box = $("members");
+  box.replaceChildren();
+  const contacts = groupContacts();
+  $("membersLabel").hidden = !contacts.length;
+  if (!contacts.length) box.append(el("p", "hint", "উপরের ঘরে ইমেইল লিখে খুঁজে কন্টাক্ট যোগ করুন।"));
+  contacts.forEach(u => {
+    const row = el("div", "pick" + (groupPicked.has(u.uid) ? " on" : ""));
+    const img = el("img");
+    img.src = pic(u);
+    img.alt = "";
+    const tick = el("span", "tickbox");
+    tick.append(icon("check"));
+    row.append(img, el("span", "n", u.name || "ব্যবহারকারী"), tick);
+    row.onclick = () => {
+      if (groupPicked.has(u.uid)) groupPicked.delete(u.uid);
+      else groupPicked.add(u.uid);
+      renderMembers();
+    };
+    box.append(row);
+  });
+  syncGroupUi();
+}
+
+function renderGroupFind(r) {
+  const box = $("groupFindResult");
+  box.replaceChildren();
+  if (!r) return;
+  const notes = {
+    invalid: "পুরো ইমেইল ঠিকানা লিখুন, যেমন name@example.com",
+    loading: "খোঁজা হচ্ছে…",
+    self: "এটি আপনার নিজের ইমেইল।",
+    error: "খুঁজতে সমস্যা হয়েছে, আবার চেষ্টা করুন।",
+    none: "এই ইমেইলে কাউকে পাওয়া যায়নি।"
+  };
+  if (r.status !== "found") {
+    box.append(el("p", "hint", notes[r.status]));
+    return;
+  }
+  const u = r.user;
+  const already = groupPicked.has(u.uid);
+  const row = el("div", "pick found");
+  const img = el("img");
+  img.src = pic(u);
+  img.alt = "";
+  row.append(img, el("span", "n", u.name || "ব্যবহারকারী"), el("span", "addpill" + (already ? " done" : ""), already ? "যোগ করা হয়েছে" : "যোগ করুন"));
+  row.onclick = () => {
+    groupExtra.set(u.uid, u);
+    groupPicked.add(u.uid);
+    $("groupFind").value = "";
+    groupFindToken++;
+    renderGroupFind(null);
+    renderMembers();
+  };
+  box.append(row);
+}
+
+$("groupFind").oninput = () => {
+  clearTimeout(groupFindTimer);
+  const term = $("groupFind").value.trim().toLowerCase();
+  const token = ++groupFindToken;
+  if (!term) {
+    renderGroupFind(null);
+    return;
+  }
+  if (!emailRe.test(term)) {
+    renderGroupFind({ status: "invalid" });
+    return;
+  }
+  renderGroupFind({ status: "loading" });
+  groupFindTimer = setTimeout(async () => {
+    const r = await lookupEmail(term);
+    if (token === groupFindToken) renderGroupFind(r);
+  }, 300);
+};
+
+const openGroupSheet = () => {
+  $("groupName").value = "";
+  $("groupFind").value = "";
+  groupExtra = new Map();
+  groupPicked = new Set();
+  lastPicked = 0;
+  groupFindToken++;
+  renderGroupFind(null);
+  renderMembers();
+  $("sheet").querySelector(".gbody").scrollTop = 0;
   $("sheet").hidden = false;
 };
+$("groupName").oninput = syncGroupUi;
 $("sheetClose").onclick = () => { $("sheet").hidden = true; };
 $("sheetDone").onclick = async () => {
   const uid = auth.currentUser.uid;
   const name = $("groupName").value.trim();
-  const picked = [...$("members").querySelectorAll("input:checked")].map(i => i.value);
+  const picked = [...groupPicked];
   if (!name || !picked.length) {
     toast("গ্রুপের নাম দিন ও কমপক্ষে একজনকে বেছে নিন");
     return;
