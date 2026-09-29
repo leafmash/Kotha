@@ -15,6 +15,8 @@ object FirestoreRest {
     private class Response(val code: Int, val body: String)
 
     private const val TIMEOUT_MS = 15000
+    private const val PUSH_ATTEMPTS = 3
+    private const val PUSH_RETRY_MS = 1500L
     private const val TOKEN_URL = "https://securetoken.googleapis.com/v1/token"
     private const val FIRESTORE_URL = "https://firestore.googleapis.com/v1"
 
@@ -29,10 +31,11 @@ object FirestoreRest {
         val members = fetchMembers(token, database, chatId) ?: return Outcome.RETRY
         if (!members.contains(session.uid)) return Outcome.FAILURE
 
+        val messageId = UUID.randomUUID().toString().replace("-", "").take(20)
         val commit = JSONObject().put(
             "writes",
             JSONArray()
-                .put(messageWrite(database, chatId, session.uid, text))
+                .put(messageWrite(database, chatId, session.uid, text, messageId))
                 .put(chatWrite(database, chatId, session.uid, members, text))
         )
         val response = request(
@@ -44,9 +47,30 @@ object FirestoreRest {
         ) ?: return Outcome.RETRY
 
         return when {
-            response.code in 200..299 -> Outcome.SUCCESS
+            response.code in 200..299 -> {
+                triggerPush(session, token, chatId, messageId)
+                Outcome.SUCCESS
+            }
             response.code == 429 || response.code >= 500 -> Outcome.RETRY
             else -> Outcome.FAILURE
+        }
+    }
+
+    private fun triggerPush(session: Session, token: String, chatId: String, messageId: String) {
+        if (session.apiBase.isBlank()) return
+        val body = JSONObject()
+            .put("type", "message")
+            .put("chatId", chatId)
+            .put("messageId", messageId)
+            .toString()
+        for (attempt in 0 until PUSH_ATTEMPTS) {
+            if (attempt > 0) Thread.sleep(PUSH_RETRY_MS * attempt)
+            val response = request(session.apiBase + "/api/notify", "POST", body, "application/json", token)
+            if (response != null) {
+                val code = response.code
+                if (code in 200..299) return
+                if (code in 400..499 && code != 408 && code != 429) return
+            }
         }
     }
 
@@ -96,8 +120,7 @@ object FirestoreRest {
 
     private fun quoted(key: String) = "`" + key.replace("\\", "\\\\").replace("`", "\\`") + "`"
 
-    private fun messageWrite(database: String, chatId: String, uid: String, text: String): JSONObject {
-        val id = UUID.randomUUID().toString().replace("-", "").take(20)
+    private fun messageWrite(database: String, chatId: String, uid: String, text: String, id: String): JSONObject {
         val fields = JSONObject()
             .put("from", stringField(uid))
             .put("type", stringField("text"))

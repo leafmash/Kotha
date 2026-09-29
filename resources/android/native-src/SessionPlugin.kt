@@ -15,11 +15,12 @@ class SessionPlugin : Plugin() {
         val projectId = call.getString("projectId")
         val uid = call.getString("uid")
         val refreshToken = call.getString("refreshToken")
+        val apiBase = call.getString("apiBase") ?: ""
         if (apiKey.isNullOrBlank() || projectId.isNullOrBlank() || uid.isNullOrBlank() || refreshToken.isNullOrBlank()) {
             call.reject("apiKey, projectId, uid and refreshToken are required")
             return
         }
-        SessionStore.save(context, Session(apiKey, projectId, uid, refreshToken))
+        SessionStore.save(context, Session(apiKey, projectId, uid, refreshToken, apiBase))
         call.resolve()
     }
 

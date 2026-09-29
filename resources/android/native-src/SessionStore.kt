@@ -2,7 +2,7 @@ package com.kotha.app
 
 import android.content.Context
 
-data class Session(val apiKey: String, val projectId: String, val uid: String, val refreshToken: String)
+data class Session(val apiKey: String, val projectId: String, val uid: String, val refreshToken: String, val apiBase: String = "")
 
 object SessionStore {
 
@@ -14,6 +14,7 @@ object SessionStore {
             .putString("projectId", session.projectId)
             .putString("uid", session.uid)
             .putString("refreshToken", session.refreshToken)
+            .putString("apiBase", session.apiBase)
             .apply()
     }
 
@@ -23,7 +24,8 @@ object SessionStore {
         val projectId = prefs.getString("projectId", null) ?: return null
         val uid = prefs.getString("uid", null) ?: return null
         val refreshToken = prefs.getString("refreshToken", null) ?: return null
-        return Session(apiKey, projectId, uid, refreshToken)
+        val apiBase = prefs.getString("apiBase", null) ?: ""
+        return Session(apiKey, projectId, uid, refreshToken, apiBase)
     }
 
     fun updateRefreshToken(context: Context, refreshToken: String) {
