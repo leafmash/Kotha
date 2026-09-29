@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="channel_messages">মেসেজ</string>
-    <string name="channel_calls">ইনকামিং কল</string>
-    <string name="reply_label">উত্তর দিন</string>
-    <string name="you_label">আপনি</string>
+    <string name="channel_messages">Messages</string>
+    <string name="channel_calls">Incoming calls</string>
+    <string name="reply_label">Reply</string>
+    <string name="you_label">You</string>
 </resources>
