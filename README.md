@@ -11,6 +11,7 @@ Firebase (Auth + Firestore + Cloud Messaging) ও Cloudinary ভিত্তি�
 | `sw.js` | সার্ভিস ওয়ার্কার (অফলাইন ক্যাশ ও পুশ নোটিফিকেশন) |
 | `manifest.json`, `icon*.png/svg` | PWA ইনস্টল |
 | `vercel.json`, `.vercelignore` | Vercel কনফিগ (শুধু অ্যাপের ফাইল ডিপ্লয় হয়) |
+| `android/`, `tools/inject_android.py`, `.github/workflows/android.yml` | Android APK (বিস্তারিত `android/README.md`-তে) |
 | `firestore.rules`, `firebase.json`, `functions/` | Firebase-এ আলাদাভাবে ডিপ্লয় হয়, Vercel-এ নয় |
 
 ## GitHub-এ আপলোড
@@ -61,3 +62,7 @@ git push -u origin main
 ## আপডেটের পর পুরোনো ভার্সন দেখালে
 
 `sw.js`-এর প্রথম লাইনে `CACHE` নামের ভার্সন সংখ্যা বাড়িয়ে (যেমন `kotha-v9` থেকে `kotha-v10`) commit ও push করুন।
+
+## Android APK
+
+`ANDROID.md` দেখুন।

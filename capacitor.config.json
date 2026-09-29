@@ -1,0 +1,26 @@
+{
+  "appId": "com.kotha.app",
+  "appName": "কথা",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": false,
+      "providers": ["google.com"]
+    },
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "backgroundColor": "#0d0f1c",
+      "androidSplashResourceName": "splash",
+      "splashFullScreen": true,
+      "splashImmersive": true,
+      "androidScaleType": "FIT_CENTER"
+    },
+    "Keyboard": {
+      "resize": "body",
+      "resizeOnFullScreen": true
+    }
+  }
+}

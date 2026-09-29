@@ -1,5 +1,14 @@
+node_modules
 functions
 firebase.json
 firestore.rules
 README.md
+ANDROID.md
 .github
+android
+resources
+scripts
+package.json
+package-lock.json
+capacitor.config.json
+www
