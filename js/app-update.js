@@ -1,3 +1,4 @@
+import { t } from "./i18n.js";
 import { isNative } from "./config.js";
 
 const CapApp = isNative ? window.Capacitor.Plugins?.App : null;
@@ -36,10 +37,10 @@ function buildOverlay(config) {
   icon.innerHTML = ICON;
 
   const title = document.createElement("h2");
-  title.textContent = "আপডেট প্রয়োজন";
+  title.textContent = t("update.title");
 
   const text = document.createElement("p");
-  text.textContent = "কথা-র নতুন ভার্সন এসেছে। ব্যবহার চালিয়ে যেতে অ্যাপটি আপডেট করুন।";
+  text.textContent = t("update.text");
 
   card.append(icon, title, text);
 
@@ -61,7 +62,7 @@ function buildOverlay(config) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "update-btn";
-  button.textContent = "এখনই আপডেট করুন";
+  button.textContent = t("update.button");
 
   card.append(track, status, button);
   overlay.append(card);
@@ -77,18 +78,18 @@ async function startDownload(apkUrl, els) {
     return;
   }
   els.track.classList.add("show");
-  els.status.textContent = "আপডেট নামছে…";
+  els.status.textContent = t("update.downloading");
   const listener = await AppUpdater.addListener("downloadProgress", ({ percent }) => {
     els.bar.style.width = percent + "%";
-    els.status.textContent = "আপডেট নামছে… " + percent + "%";
+    els.status.textContent = t("update.downloading") + " " + percent + "%";
   });
   try {
     await AppUpdater.downloadAndInstall({ url: apkUrl });
-    els.status.textContent = "ইনস্টলার খুলছে…";
+    els.status.textContent = t("update.opening");
   } catch (err) {
     els.status.textContent = err?.message === "install-permission-required"
-      ? "কথা-কে অ্যাপ ইনস্টলের অনুমতি দিয়ে আবার বাটনটি চাপুন।"
-      : "আপডেট নামানো যায়নি। ইন্টারনেট দেখে আবার চেষ্টা করুন।";
+      ? t("update.permission")
+      : t("update.failed");
     els.button.disabled = false;
   } finally {
     listener.remove();

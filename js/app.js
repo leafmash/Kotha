@@ -2,6 +2,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserPopupRedirectResolver, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getMessaging, getToken, isSupported } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
 import { createCalls } from "./call.js";
+import { createPushTrigger } from "./push-trigger.js";
+import { t, getLang, locale, fmtNumber, stored, displayStored, applyStatic, onLangChange, toggleLang } from "./i18n.js";
 import { isNative } from "./config.js";
 import { setupNative, hideNativeSplash, applyStatusBar, setActiveChat, syncNativeSession, nativeGoogleIdToken, registerNativePush, initBatteryPrompt, consumePendingChat } from "./native.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, query, orderBy, where, limit, serverTimestamp, arrayUnion, arrayRemove, increment, writeBatch, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -22,6 +24,7 @@ const PAGE = 50;
 
 const app = initializeApp(firebaseConfig);
 const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence], popupRedirectResolver: browserPopupRedirectResolver });
+const triggerPush = createPushTrigger(auth);
 const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 
 const $ = id => document.getElementById(id);
@@ -43,19 +46,39 @@ const pic = u => u?.photo || initialAvatar(u?.name || "?");
 const clock = ts => ts?.toDate ? ts.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 const dayLabel = d => {
   const t = new Date();
-  if (d.toDateString() === t.toDateString()) return "আজ";
+  if (d.toDateString() === t.toDateString()) return t("common.today");
   t.setDate(t.getDate() - 1);
-  if (d.toDateString() === t.toDateString()) return "গতকাল";
-  return d.toLocaleDateString("bn-BD", { day: "numeric", month: "long" });
+  if (d.toDateString() === t.toDateString()) return t("common.yesterday");
+  return d.toLocaleDateString(locale(), { day: "numeric", month: "long" });
 };
 const listTime = ts => {
   if (!ts?.toDate) return "";
   const d = ts.toDate();
   return d.toDateString() === new Date().toDateString() ? clock(ts) : d.toLocaleDateString([], { day: "numeric", month: "short" });
 };
-const preview = m => m.deleted ? "মেসেজ মুছে ফেলা হয়েছে" : ({ image: "ছবি", video: "ভিডিও", audio: "ভয়েস মেসেজ", file: m.name || "ফাইল" }[m.type] || m.text);
+const preview = m => {
+  if (m.deleted) return t("chat.deleted");
+  if (m.callLog) return callLogText(m.callLog);
+  return { image: t("common.photo"), video: t("common.video"), audio: t("common.voiceMessage"), file: m.name || t("common.file") }[m.type] || m.text;
+};
+const previewStored = m => {
+  if (m.deleted) return stored("deleted");
+  if (m.callLog) return callLogText(m.callLog);
+  const tokens = { image: stored("image"), video: stored("video"), audio: stored("audio"), file: m.name || stored("file") };
+  return tokens[m.type] || m.text;
+};
+const callLogText = log => {
+  const label = t(log.video ? "call.video" : "call.voice");
+  const icon = log.video ? "🎥" : "📞";
+  if (log.kind === "done") return icon + " " + label + " · " + Math.floor((log.secs || 0) / 60) + ":" + String((log.secs || 0) % 60).padStart(2, "0");
+  if (log.kind === "declined") return icon + " " + t("call.logDeclined", { label });
+  if (log.kind === "cancelled") return icon + " " + t("call.logCancelled", { label });
+  return icon + " " + t("call.logMissed", { label });
+};
+const lastText = value => displayStored(value);
 
 const icons = {
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.7 3.9 5.7 3.9 9s-1.3 6.3-3.9 9c-2.6-2.7-3.9-5.7-3.9-9S9.4 5.7 12 3z"/>',
   ban: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
   clip: '<path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.5 3.5 0 0 1 5 5L10 17.5a2 2 0 0 1-3-3l7.5-7.5"/>',
   reply: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v3"/>',
@@ -152,10 +175,17 @@ let unsubs = [];
 let chatUnsubs = [];
 let pendingName = "";
 let signup = false;
+const renderAuthTexts = () => {
+  $("authBtn").textContent = t(signup ? "auth.signUp" : "auth.signIn");
+  $("switchText").textContent = t(signup ? "auth.haveAccount" : "auth.newHere");
+  $("switchLink").textContent = t(signup ? "auth.signIn" : "auth.signUp");
+  $("langLink").textContent = getLang() === "en" ? "বাংলা" : "English";
+};
 let isTyping = false;
 let typingTimer;
 let chatsReady = false;
 let msgUnsub = null;
+let lastMessageDocs = null;
 let pendingChat = new URLSearchParams(location.search).get("chat");
 let usersLoaded = false;
 const userWatch = new Map();
@@ -205,10 +235,11 @@ function closeMore() {
 function openMore() {
   const dark = document.documentElement.dataset.theme === "dark";
   const items = [
-    { icon: "users", label: "নতুন গ্রুপ", fn: () => openGroupSheet() },
-    { icon: "camera", label: "প্রোফাইল ছবি বদলান", fn: () => $("avatarInput").click() },
-    { icon: dark ? "sun" : "moon", label: dark ? "লাইট মোড" : "ডার্ক মোড", fn: toggleTheme },
-    { icon: "logout", label: "সাইন আউট", fn: () => logout(), danger: true }
+    { icon: "users", label: t("menu.newGroup"), fn: () => openGroupSheet() },
+    { icon: "camera", label: t("menu.changeProfilePhoto"), fn: () => $("avatarInput").click() },
+    { icon: dark ? "sun" : "moon", label: dark ? t("menu.lightMode") : t("menu.darkMode"), fn: toggleTheme },
+    { icon: "globe", label: getLang() === "en" ? "বাংলা" : "English", fn: toggleLang },
+    { icon: "logout", label: t("menu.signOut"), fn: () => logout(), danger: true }
   ];
   moreMenu.replaceChildren(...items.map(it => {
     const b = el("button", "mi" + (it.danger ? " danger" : ""));
@@ -228,13 +259,33 @@ document.addEventListener("click", e => {
   if (!moreMenu.hidden && !e.target.closest("#moreMenu, #menuBtn")) closeMore();
 });
 
+$("langLink").onclick = e => {
+  e.preventDefault();
+  toggleLang();
+};
+
+onLangChange(() => {
+  renderAuthTexts();
+  if (auth.currentUser) {
+    updateDoc(doc(db, "users", auth.currentUser.uid), { lang: getLang() }).catch(() => {});
+    renderList();
+    if (active) {
+      renderPeer();
+      if (lastMessageDocs) renderMessages(lastMessageDocs);
+    }
+    if (!$("sheet").hidden) syncGroupUi();
+    if (!$("findSheet").hidden) renderFind();
+    if (!moreMenu.hidden) openMore();
+  }
+});
+
+renderAuthTexts();
+
 $("switchLink").onclick = e => {
   e.preventDefault();
   signup = !signup;
   $("name").hidden = !signup;
-  $("authBtn").textContent = signup ? "অ্যাকাউন্ট খুলুন" : "সাইন ইন করুন";
-  $("switchText").textContent = signup ? "আগে থেকেই অ্যাকাউন্ট আছে?" : "নতুন ব্যবহারকারী?";
-  $("switchLink").textContent = signup ? "সাইন ইন করুন" : "অ্যাকাউন্ট খুলুন";
+  renderAuthTexts();
 };
 
 $("authForm").onsubmit = async e => {
@@ -243,7 +294,7 @@ $("authForm").onsubmit = async e => {
   const btn = $("authBtn");
   const label = btn.textContent;
   btn.disabled = true;
-  btn.textContent = "অপেক্ষা করুন…";
+  btn.textContent = t("auth.wait");
   const email = $("email").value.trim();
   const password = $("password").value;
   try {
@@ -271,12 +322,12 @@ $("googleBtn").onclick = async () => {
     }
   } catch (err) {
     const cancelled = /cancel/i.test(err.message || "");
-    $("authErr").textContent = cancelled ? "" : (err.code || "Google দিয়ে সাইন ইন করা যায়নি").replace("auth/", "").replace(/-/g, " ");
+    $("authErr").textContent = cancelled ? "" : (err.code || t("auth.googleFail")).replace("auth/", "").replace(/-/g, " ");
   }
 };
 
 async function logout() {
-  const ok = await askConfirm({ title: "সাইন আউট করবেন?", text: "আপনি এই ডিভাইস থেকে সাইন আউট হয়ে যাবেন। আবার সাইন ইন করে চ্যাটে ফিরতে পারবেন।", ok: "সাইন আউট", iconName: "logout" });
+  const ok = await askConfirm({ title: t("signout.title"), text: t("signout.text"), ok: t("signout.ok"), iconName: "logout" });
   if (!ok) return;
   await unregisterPush();
   await setPresence(false);
@@ -317,7 +368,7 @@ onAuthStateChanged(auth, async user => {
     $("app").hidden = true;
     $("auth").hidden = false;
     $("authBtn").disabled = false;
-    $("authBtn").textContent = signup ? "অ্যাকাউন্ট খুলুন" : "সাইন ইন করুন";
+    renderAuthTexts();
     localStorage.removeItem("kotha-session");
     syncNativeSession(null, firebaseConfig);
     hideSplash();
@@ -335,10 +386,11 @@ onAuthStateChanged(auth, async user => {
   try {
     const snap = await getDoc(ref);
     if (!snap.exists()) {
-      await setDoc(ref, { uid: user.uid, name: pendingName || user.displayName || (user.email || "").split("@")[0] || "ব্যবহারকারী", photo: user.photoURL || "" }, { merge: true });
+      await setDoc(ref, { uid: user.uid, name: pendingName || user.displayName || (user.email || "").split("@")[0] || t("common.user"), photo: user.photoURL || "" }, { merge: true });
     } else if ("email" in snap.data()) {
       await updateDoc(ref, { email: deleteField() });
     }
+    if (!snap.exists() || snap.data().lang !== getLang()) await setDoc(ref, { lang: getLang() }, { merge: true });
     const mail = (user.email || "").toLowerCase();
     if (mail) {
       const lref = doc(db, "emailLookup", mail);
@@ -347,7 +399,7 @@ onAuthStateChanged(auth, async user => {
     }
   } catch (err) {
     hideSplash();
-    toast("লোড করা যায়নি, ইন্টারনেট সংযোগ দেখুন");
+    toast(t("list.loadFail"));
   }
   $("app").hidden = false;
   registerPush(true);
@@ -404,20 +456,20 @@ function renderFind() {
   const s = searchState;
   if (!term) return;
   if (!emailRe.test(term)) {
-    box.append(el("p", "hint", "পুরো ইমেইল ঠিকানা লিখুন, যেমন name@example.com"));
+    box.append(el("p", "hint", t("find.invalid")));
   } else if (s.term !== term || s.status === "idle" || s.status === "loading") {
-    box.append(el("p", "hint", "খোঁজা হচ্ছে…"));
+    box.append(el("p", "hint", t("find.loading")));
   } else if (s.status === "found") {
     box.append(row(s.user, term, "", 0, () => {
       closeFind();
       openChat(s.user);
     }));
   } else if (s.status === "self") {
-    box.append(el("p", "hint", "এটি আপনার নিজের ইমেইল।"));
+    box.append(el("p", "hint", t("find.self")));
   } else if (s.status === "error") {
-    box.append(el("p", "hint", "খুঁজতে সমস্যা হয়েছে, আবার চেষ্টা করুন।"));
+    box.append(el("p", "hint", t("find.error")));
   } else {
-    box.append(el("p", "hint", "এই ইমেইলে কাউকে পাওয়া যায়নি।"));
+    box.append(el("p", "hint", t("find.none")));
   }
 }
 
@@ -484,11 +536,11 @@ $("avatarInput").onchange = async e => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
-  toast("ছবি আপলোড হচ্ছে…", true);
+  toast(t("photo.uploading"), true);
   try {
     const res = await upload(file);
     await updateDoc(doc(db, "users", auth.currentUser.uid), { photo: res.secure_url });
-    toast("প্রোফাইল ছবি বদলানো হয়েছে");
+    toast(t("photo.changed"));
   } catch (err) {
     toast(err.message);
   }
@@ -503,7 +555,7 @@ function row(u, sub, time, unread, fn, isActive) {
   av.append(img);
   const body = el("div", "body");
   const top = el("div", "top");
-  top.append(el("b", "", u.name || "ব্যবহারকারী"), el("time", "", time));
+  top.append(el("b", "", u.name || t("common.user")), el("time", "", time));
   const bot = el("div", "bot");
   bot.append(el("span", "sub", sub));
   if (unread > 0) bot.append(el("span", "badge", unread > 99 ? "99+" : String(unread)));
@@ -534,7 +586,7 @@ function renderList() {
     ic.append(icon("plus"));
     av.append(ic);
     const body = el("div", "body");
-    body.append(el("b", "", "নতুন গ্রুপ তৈরি করুন"), el("span", "sub", "চ্যাটে থাকা বন্ধুদের নিয়ে গ্রুপ খুলুন"));
+    body.append(el("b", "", t("list.newGroupTitle")), el("span", "sub", t("list.newGroupSub")));
     r.append(av, body);
     r.onclick = openGroupSheet;
     list.append(r);
@@ -549,24 +601,24 @@ function renderList() {
       if (c.group) {
         if (!hit(c.name)) return;
         const g = { uid: c.id, name: c.name, photo: c.photo || "" };
-        const who = c.lastFrom === uid ? "আপনি: " : (users.get(c.lastFrom)?.name || "") + ": ";
-        list.append(row(g, who + c.lastMessage, listTime(c.lastAt), unreadOf(c, uid), () => openChat(null, c), active?.id === c.id));
+        const who = c.lastFrom === uid ? t("list.youPrefix") : (users.get(c.lastFrom)?.name || "") + ": ";
+        list.append(row(g, who + lastText(c.lastMessage), listTime(c.lastAt), unreadOf(c, uid), () => openChat(null, c), active?.id === c.id));
         count++;
         return;
       }
       const peer = users.get(c.members.find(m => m !== uid));
       if (!peer || !hit(peer.name)) return;
-      const sub = (c.lastFrom === uid ? "আপনি: " : "") + c.lastMessage;
+      const sub = (c.lastFrom === uid ? t("list.youPrefix") : "") + lastText(c.lastMessage);
       list.append(row(peer, sub, listTime(c.lastAt), unreadOf(c, uid), () => openChat(peer), active?.peer === peer.uid));
       count++;
     });
 
   if (count) return;
   let msg;
-  if (term) msg = "এই নামে কোনো কথোপকথন পাওয়া যায়নি।";
-  else if (filter === "group") msg = "এখনও কোনো গ্রুপ নেই।";
-  else if (filter === "unread") msg = "কোনো অপঠিত মেসেজ নেই।";
-  else msg = "এখনও কোনো চ্যাট নেই। উপরের কন্টাক্ট যোগ করার আইকনে চেপে ইমেইল দিয়ে কাউকে খুঁজে কথা শুরু করুন।";
+  if (term) msg = t("list.noMatch");
+  else if (filter === "group") msg = t("list.noGroups");
+  else if (filter === "unread") msg = t("list.noUnread");
+  else msg = t("list.noChats");
   list.append(el("p", "hint", msg));
 }
 $("search").oninput = renderList;
@@ -583,7 +635,7 @@ function syncFilterUi() {
   document.querySelectorAll("#rail [data-f]").forEach(x => x.classList.toggle("on", x.dataset.f === filter));
   document.querySelectorAll("#tabs [data-f]").forEach(x => x.classList.toggle("on", x.dataset.f === (filter === "group" ? "group" : "all")));
   $("chips").hidden = filter === "group";
-  document.querySelector(".dtitle").textContent = filter === "group" ? "গ্রুপ" : "চ্যাট";
+  document.querySelector(".dtitle").textContent = filter === "group" ? t("common.groups") : t("common.chats");
 }
 
 document.querySelectorAll("#tabs [data-f]").forEach(b => {
@@ -662,7 +714,8 @@ function listenMessages() {
   msgUnsub = onSnapshot(query(collection(db, "chats", target.id, "messages"), orderBy("at", "desc"), limit(target.limit)), s => {
     if (active !== target) return;
     target.hasMore = s.docs.length >= target.limit;
-    renderMessages(s.docs.slice().reverse());
+    lastMessageDocs = s.docs.slice().reverse();
+    renderMessages(lastMessageDocs);
     const unseen = s.docs.filter(d => d.data().from !== uid && d.data().status !== "seen");
     if (unseen.length) {
       const batch = writeBatch(db);
@@ -696,7 +749,7 @@ function renderPeer() {
     $("peerAv").className = "av";
     $("peerName").textContent = g.name || "";
     $("peerStatus").classList.toggle("live", typers.length > 0);
-    $("peerStatus").textContent = typers.length ? typers.join(", ") + " টাইপ করছে…" : (g.members?.length || 0) + " জন সদস্য";
+    $("peerStatus").textContent = typers.length ? t("chat.typingMany", { names: typers.join(", ") }) : t("chat.members", { n: fmtNumber(g.members?.length || 0) });
     return;
   }
   const peer = users.get(active.peer);
@@ -708,9 +761,9 @@ function renderPeer() {
   const status = $("peerStatus");
   const typing = active.data?.typing?.[active.peer];
   status.classList.toggle("live", !!typing || !!peer.online);
-  if (typing) status.textContent = "টাইপ করছে…";
-  else if (peer.online) status.textContent = "অনলাইন";
-  else status.textContent = peer.lastSeen ? "সর্বশেষ দেখা " + dayLabel(peer.lastSeen.toDate()) + ", " + clock(peer.lastSeen) : "অফলাইন";
+  if (typing) status.textContent = t("chat.typing");
+  else if (peer.online) status.textContent = t("chat.online");
+  else status.textContent = peer.lastSeen ? t("chat.lastSeen", { day: dayLabel(peer.lastSeen.toDate()), time: clock(peer.lastSeen) }) : t("chat.offline");
 }
 
 function renderMessages(all) {
@@ -765,12 +818,12 @@ function renderMessages(all) {
 
     if (m.deleted) {
       const gone = el("em", "gone");
-      gone.append(icon("ban"), " মেসেজ মুছে ফেলা হয়েছে");
+      gone.append(icon("ban"), " " + t("chat.deleted"));
       b.append(gone);
     } else if (m.type === "image") {
       const img = el("img", "media");
       img.src = m.url;
-      img.alt = "ছবি";
+      img.alt = t("common.photo");
       img.loading = "lazy";
       img.onclick = () => { $("lightbox").querySelector("img").src = m.url; $("lightbox").hidden = false; };
       b.append(img);
@@ -787,14 +840,14 @@ function renderMessages(all) {
       b.append(a);
     } else if (m.type === "file") {
       const a = el("a", "file");
-      a.append(icon("clip"), " " + (m.name || "ফাইল"));
+      a.append(icon("clip"), " " + (m.name || t("common.file")));
       a.href = m.url;
       a.target = "_blank";
       a.rel = "noopener";
       b.append(a);
     } else {
       const p = el("p");
-      p.append(linkify(m.text));
+      p.append(linkify(m.callLog ? callLogText(m.callLog) : m.text));
       b.append(p);
     }
 
@@ -855,12 +908,12 @@ async function removeMessage(d) {
   }
   const mine = d.data().from === uid;
   const options = [];
-  if (mine) options.push({ label: "সবার জন্য মুছুন", value: "all", kind: "dok" });
-  options.push({ label: "আমার জন্য মুছুন", value: "me", kind: mine ? "dsoft" : "dok" });
-  options.push({ label: "বাতিল", value: null, kind: "dcancel" });
+  if (mine) options.push({ label: t("msg.deleteForAll"), value: "all", kind: "dok" });
+  options.push({ label: t("msg.deleteForMe"), value: "me", kind: mine ? "dsoft" : "dok" });
+  options.push({ label: t("common.cancel"), value: null, kind: "dcancel" });
   const choice = await askChoice({
-    title: "মেসেজ মুছবেন?",
-    text: mine ? "সবার জন্য মুছলে মেসেজটি সবার চ্যাট থেকে সরে যাবে। শুধু আপনার জন্য মুছলে অন্যরা এটি দেখতে পাবে।" : "মেসেজটি শুধু আপনার চ্যাট থেকে সরে যাবে, অন্যরা এটি দেখতে পাবে।",
+    title: t("msg.deleteTitle"),
+    text: mine ? t("msg.deleteTextMine") : t("msg.deleteTextOther"),
     iconName: "trash",
     options
   });
@@ -872,7 +925,7 @@ async function removeMessage(d) {
   const chatId = active.id;
   const wasLast = d.id === active.lastId;
   await updateDoc(d.ref, { deleted: true, text: "", url: "" });
-  if (wasLast) await setDoc(doc(db, "chats", chatId), { lastMessage: "মেসেজ মুছে ফেলা হয়েছে" }, { merge: true });
+  if (wasLast) await setDoc(doc(db, "chats", chatId), { lastMessage: stored("deleted") }, { merge: true });
 }
 
 async function copyText(text) {
@@ -888,7 +941,7 @@ async function copyText(text) {
     document.execCommand("copy");
     t.remove();
   }
-  toast("কপি করা হয়েছে");
+  toast(t("chat.copied"));
 }
 
 function openMenu(d, m, mine) {
@@ -906,8 +959,8 @@ function openMenu(d, m, mine) {
 
   const prev = $("menuPreview");
   prev.className = "mbubble " + (mine ? "mine" : "theirs") + (m.deleted ? " gone" : "");
-  const body = el("p", "", m.deleted ? "মেসেজ মুছে ফেলা হয়েছে" : preview(m));
-  const time = el("small", "", (mine ? "আপনি" : users.get(m.from)?.name || "") + (m.at ? " · " + clock(m.at) : ""));
+  const body = el("p", "", m.deleted ? t("chat.deleted") : preview(m));
+  const time = el("small", "", (mine ? t("common.you") : users.get(m.from)?.name || "") + (m.at ? " · " + clock(m.at) : ""));
   prev.replaceChildren(body, time);
 
   const items = [];
@@ -920,12 +973,12 @@ function openMenu(d, m, mine) {
     items.push(b);
   };
   if (m.deleted) {
-    tile("trash", "আমার জন্য মুছুন", () => hideForMe(d), true);
+    tile("trash", t("msg.deleteForMe"), () => hideForMe(d), true);
   } else {
-    tile("reply", "উত্তর দিন", () => setReply(preview(m), d.id));
+    tile("reply", t("msg.reply"), () => setReply(preview(m), d.id));
     const copyable = m.type === "text" || !m.type ? m.text : m.url;
-    if (copyable) tile("copy", "কপি করুন", () => copyText(copyable));
-    tile("trash", "মুছুন", () => removeMessage(d), true);
+    if (copyable) tile("copy", t("msg.copy"), () => copyText(copyable));
+    tile("trash", t("msg.delete"), () => removeMessage(d), true);
   }
   const grid = $("menuItems");
   grid.style.setProperty("--n", items.length);
@@ -1023,9 +1076,10 @@ async function send(payload, target = active) {
   const msg = { from: uid, type: "text", text: "", at: serverTimestamp(), status: "sent", ...payload };
   if (target.reply) msg.replyTo = { text: target.reply.text, id: target.reply.id };
   if (target === active) clearReply();
-  await addDoc(collection(db, "chats", target.id, "messages"), msg);
+  const sent = await addDoc(collection(db, "chats", target.id, "messages"), msg);
+  triggerPush({ type: "message", chatId: target.id, messageId: sent.id });
   await setDoc(doc(db, "chats", target.id), {
-    lastMessage: preview(msg),
+    lastMessage: previewStored(msg),
     lastFrom: uid,
     lastAt: serverTimestamp(),
     typing: { [uid]: false },
@@ -1064,7 +1118,7 @@ async function submitText() {
   try {
     await send({ text });
   } catch (err) {
-    toast("মেসেজ পাঠানো যায়নি");
+    toast(t("chat.sendFail"));
   }
 }
 input.onkeydown = e => {
@@ -1092,7 +1146,7 @@ async function upload(file) {
   fd.append("file", file);
   fd.append("upload_preset", UPLOAD_PRESET);
   const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, { method: "POST", body: fd });
-  if (!res.ok) throw new Error("আপলোড ব্যর্থ হয়েছে, আবার চেষ্টা করুন");
+  if (!res.ok) throw new Error(t("chat.uploadFail"));
   return res.json();
 }
 
@@ -1102,7 +1156,7 @@ $("fileInput").onchange = async e => {
   e.target.value = "";
   if (!file || !active) return;
   const target = active;
-  toast("আপলোড হচ্ছে…", true);
+  toast(t("chat.uploading"), true);
   try {
     const res = await upload(file);
     const type = res.resource_type === "image" ? "image" : res.resource_type === "video" ? (file.type.startsWith("audio") ? "audio" : "video") : "file";
@@ -1145,7 +1199,7 @@ $("micBtn").onclick = async () => {
       stopRecUi();
       if (recCancelled) return;
       const blob = new Blob(chunks, { type: recorder.mimeType });
-      toast("ভয়েস মেসেজ পাঠানো হচ্ছে…", true);
+      toast(t("chat.sendingVoice"), true);
       try {
         const res = await upload(new File([blob], "voice", { type: blob.type }));
         await send({ type: "audio", url: res.secure_url }, target);
@@ -1164,7 +1218,7 @@ $("micBtn").onclick = async () => {
     $("micBtn").classList.add("rec");
     document.querySelector("#pane footer").classList.add("recording");
   } catch (err) {
-    toast("মাইক্রোফোনের অনুমতি দিন");
+    toast(t("chat.micPermission"));
   }
 };
 
@@ -1196,7 +1250,7 @@ async function react(d, emoji) {
 function notify(c, id) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const sender = users.get(c.lastFrom)?.name || "";
-  const n = new Notification(c.group ? c.name : sender, { body: (c.group ? sender + ": " : "") + c.lastMessage, icon: "icon.svg", tag: id });
+  const n = new Notification(c.group ? c.name : sender, { body: (c.group ? sender + ": " : "") + lastText(c.lastMessage), icon: "icon.svg", tag: id });
   n.onclick = () => {
     window.focus();
     n.close();
@@ -1301,7 +1355,7 @@ function syncGroupUi() {
     img.alt = "";
     const x = el("i");
     x.append(icon("close"));
-    pk.append(img, x, el("span", "", u.name || "ব্যবহারকারী"));
+    pk.append(img, x, el("span", "", u.name || t("common.user")));
     pk.onclick = () => {
       groupPicked.delete(id);
       renderMembers();
@@ -1312,7 +1366,7 @@ function syncGroupUi() {
   $("pickedSec").hidden = !groupPicked.size;
   if (groupPicked.size > lastPicked) requestAnimationFrame(() => strip.scrollTo({ left: strip.scrollWidth, behavior: "smooth" }));
   lastPicked = groupPicked.size;
-  $("sheetCount").textContent = groupPicked.size ? groupPicked.size.toLocaleString("bn-BD") + " জন নির্বাচিত" : "মেম্বার বেছে নিন";
+  $("sheetCount").textContent = groupPicked.size ? t("group.selected", { n: fmtNumber(groupPicked.size) }) : t("group.pickMembers");
   $("sheetDone").classList.toggle("off", !($("groupName").value.trim() && groupPicked.size));
 }
 
@@ -1321,7 +1375,7 @@ function renderMembers() {
   box.replaceChildren();
   const contacts = groupContacts();
   $("membersLabel").hidden = !contacts.length;
-  if (!contacts.length) box.append(el("p", "hint", "উপরের ঘরে ইমেইল লিখে খুঁজে কন্টাক্ট যোগ করুন।"));
+  if (!contacts.length) box.append(el("p", "hint", t("group.noContacts")));
   contacts.forEach(u => {
     const row = el("div", "pick" + (groupPicked.has(u.uid) ? " on" : ""));
     const img = el("img");
@@ -1329,7 +1383,7 @@ function renderMembers() {
     img.alt = "";
     const tick = el("span", "tickbox");
     tick.append(icon("check"));
-    row.append(img, el("span", "n", u.name || "ব্যবহারকারী"), tick);
+    row.append(img, el("span", "n", u.name || t("common.user")), tick);
     row.onclick = () => {
       if (groupPicked.has(u.uid)) groupPicked.delete(u.uid);
       else groupPicked.add(u.uid);
@@ -1345,11 +1399,11 @@ function renderGroupFind(r) {
   box.replaceChildren();
   if (!r) return;
   const notes = {
-    invalid: "পুরো ইমেইল ঠিকানা লিখুন, যেমন name@example.com",
-    loading: "খোঁজা হচ্ছে…",
-    self: "এটি আপনার নিজের ইমেইল।",
-    error: "খুঁজতে সমস্যা হয়েছে, আবার চেষ্টা করুন।",
-    none: "এই ইমেইলে কাউকে পাওয়া যায়নি।"
+    invalid: t("find.invalid"),
+    loading: t("find.loading"),
+    self: t("find.self"),
+    error: t("find.error"),
+    none: t("find.none")
   };
   if (r.status !== "found") {
     box.append(el("p", "hint", notes[r.status]));
@@ -1361,7 +1415,7 @@ function renderGroupFind(r) {
   const img = el("img");
   img.src = pic(u);
   img.alt = "";
-  row.append(img, el("span", "n", u.name || "ব্যবহারকারী"), el("span", "addpill" + (already ? " done" : ""), already ? "যোগ করা হয়েছে" : "যোগ করুন"));
+  row.append(img, el("span", "n", u.name || t("common.user")), el("span", "addpill" + (already ? " done" : ""), already ? t("find.added") : t("find.add")));
   row.onclick = () => {
     groupExtra.set(u.uid, u);
     groupPicked.add(u.uid);
@@ -1411,11 +1465,11 @@ $("sheetDone").onclick = async () => {
   const name = $("groupName").value.trim();
   const picked = [...groupPicked];
   if (!name || !picked.length) {
-    toast("গ্রুপের নাম দিন ও কমপক্ষে একজনকে বেছে নিন");
+    toast(t("group.needName"));
     return;
   }
   const members = [uid, ...picked];
-  const ref = await addDoc(collection(db, "chats"), { group: true, name, admin: uid, members, lastMessage: "গ্রুপ তৈরি হয়েছে", lastFrom: uid, lastAt: serverTimestamp() });
+  const ref = await addDoc(collection(db, "chats"), { group: true, name, admin: uid, members, lastMessage: stored("groupCreated"), lastFrom: uid, lastAt: serverTimestamp() });
   $("sheet").hidden = true;
   openChat(null, { id: ref.id, name, members });
 };
@@ -1423,6 +1477,7 @@ $("sheetDone").onclick = async () => {
 const calls = createCalls({
   auth,
   db,
+  push: triggerPush,
   fs: { collection, doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, query, where, serverTimestamp },
   $,
   toast,
@@ -1464,7 +1519,7 @@ const handleBack = () => {
   if (!$("emojiPanel").hidden) { $("emojiPanel").hidden = true; return true; }
   const callState = calls.busy();
   if (callState) {
-    toast(callState === "in" ? "কলটি ধরুন বা প্রত্যাখ্যান করুন" : "কল চলছে। শেষ করতে লাল বাটন চাপুন");
+    toast(callState === "in" ? t("nav.answerOrDecline") : t("nav.callInProgress"));
     return true;
   }
   if (!$("replyBar").hidden) { clearReply(); return true; }

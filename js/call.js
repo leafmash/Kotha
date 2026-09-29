@@ -1,23 +1,24 @@
 import { API_BASE, isNative } from "./config.js";
+import { t } from "./i18n.js";
 
 const RING_MS = 45000;
 const STALE_MS = 90000;
 const DROP_MS = 12000;
 const CAND_DELAY = 250;
 const FALLBACK_ICE = [{ urls: "stun:stun.l.google.com:19302" }];
-const END_TEXT = { ended: "কল শেষ হয়েছে", declined: "কল প্রত্যাখ্যান করা হয়েছে", missed: "মিসড কল" };
+const endText = status => ({ ended: t("call.ended"), declined: t("call.declined"), missed: t("call.missed") }[status]);
 
 const fmt = s => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 
 const mediaError = err => {
   const n = err && err.name;
-  if (n === "NotAllowedError" || n === "SecurityError") return "মাইক্রোফোন/ক্যামেরার অনুমতি দিন";
-  if (n === "NotFoundError" || n === "OverconstrainedError") return "মাইক্রোফোন বা ক্যামেরা পাওয়া যায়নি";
-  if (n === "NotReadableError") return "মাইক্রোফোন বা ক্যামেরা অন্য অ্যাপ ব্যবহার করছে";
-  return "কল শুরু করা যায়নি";
+  if (n === "NotAllowedError" || n === "SecurityError") return t("call.micCamPermission");
+  if (n === "NotFoundError" || n === "OverconstrainedError") return t("call.micCamMissing");
+  if (n === "NotReadableError") return t("call.micCamBusy");
+  return t("call.startFail");
 };
 
-export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, send, askChoice }) {
+export function createCalls({ auth, db, fs, push, $, toast, pic, getActive, getUsers, send, askChoice }) {
   const { collection, doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, query, where, serverTimestamp } = fs;
 
   let call = null;
@@ -314,13 +315,13 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
         onConnected(c);
       } else if (st === "disconnected") {
         c.weak = true;
-        setStatus("সংযোগ দুর্বল…");
+        setStatus(t("call.weak"));
         clearTimeout(c.dropTimer);
         c.dropTimer = setTimeout(() => {
-          if (!c.ended && pc.connectionState !== "connected") finish(c, "ended", "সংযোগ বিচ্ছিন্ন হয়েছে");
+          if (!c.ended && pc.connectionState !== "connected") finish(c, "ended", t("call.dropped"));
         }, DROP_MS);
       } else if (st === "failed") {
-        finish(c, "ended", "সংযোগ করা যায়নি");
+        finish(c, "ended", t("call.connectFail"));
       }
     };
     if (navigator.wakeLock) {
@@ -340,16 +341,16 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
       c.data = d;
       if (c.dir === "out" && d.answer && c.pc && !c.pc.remoteDescription) {
         stopTone();
-        setStatus("সংযোগ হচ্ছে…");
-        c.pc.setRemoteDescription(d.answer).then(() => flushPending(c)).catch(() => finish(c, "ended", "কল সংযোগ করা যায়নি"));
+        setStatus(t("call.connecting"));
+        c.pc.setRemoteDescription(d.answer).then(() => flushPending(c)).catch(() => finish(c, "ended", t("call.setupFail")));
       }
       const off = d.cam ? d.cam[c.peerUid] === false : false;
       if (off !== c.peerCamOff) {
         c.peerCamOff = off;
         layout(c);
       }
-      if (END_TEXT[d.status]) {
-        const text = d.endReason === "busy" ? "ব্যস্ত আছেন" : (c.dir === "out" && d.status === "missed" ? "" : END_TEXT[d.status]);
+      if (endText(d.status)) {
+        const text = d.endReason === "busy" ? t("call.busy") : (c.dir === "out" && d.status === "missed" ? "" : endText(d.status));
         finish(c, d.status, text, true);
       }
     }));
@@ -357,13 +358,24 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
 
   function logCall(c, reason) {
     const icon = c.video ? "🎥" : "📞";
-    const label = c.video ? "ভিডিও কল" : "ভয়েস কল";
+    const label = t(c.video ? "call.video" : "call.voice");
+    const secs = Math.floor((Date.now() - c.startedAt) / 1000);
     let text;
-    if (c.connected) text = icon + " " + label + " · " + fmt(Math.floor((Date.now() - c.startedAt) / 1000));
-    else if (reason === "declined") text = icon + " " + label + " প্রত্যাখ্যাত";
-    else if (reason === "ended") text = icon + " " + label + " বাতিল";
-    else text = icon + " মিসড " + label;
-    send({ text }, { id: c.chatId, members: [myUid(), c.peerUid], reply: null }).catch(() => {});
+    let kind;
+    if (c.connected) {
+      kind = "done";
+      text = icon + " " + label + " · " + fmt(secs);
+    } else if (reason === "declined") {
+      kind = "declined";
+      text = icon + " " + t("call.logDeclined", { label });
+    } else if (reason === "ended") {
+      kind = "cancelled";
+      text = icon + " " + t("call.logCancelled", { label });
+    } else {
+      kind = "missed";
+      text = icon + " " + t("call.logMissed", { label });
+    }
+    send({ text, callLog: { kind, video: !!c.video, secs: kind === "done" ? secs : 0 } }, { id: c.chatId, members: [myUid(), c.peerUid], reply: null }).catch(() => {});
   }
 
   function finish(c, reason, text, remote) {
@@ -405,12 +417,12 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     const me = auth.currentUser;
     if (call || !me || !active || active.group || !active.peer) return;
     if (!window.RTCPeerConnection || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      toast("এই ডিভাইসে কল করা যাবে না");
+      toast(t("call.unsupported"));
       return;
     }
     const c = newCall({ dir: "out", video, peerUid: active.peer, chatId: active.id });
     call = c;
-    showCall(c, "কল হচ্ছে…");
+    showCall(c, t("call.calling"));
     startTone("out");
     startNativeAudio(video);
     let stream;
@@ -446,16 +458,17 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
         updateDoc(c.ref, { status: "ended", endedAt: serverTimestamp(), endReason: "ended" }).catch(() => {});
         return;
       }
-      setStatus("রিং হচ্ছে…");
+      if (push) push({ type: "call", callId: c.id });
+      setStatus(t("call.ringing"));
       watchCall(c);
       watchCandidates(c);
       c.canSend = true;
       flushOut(c);
       c.ringTimer = setTimeout(() => {
-        if (!c.connected && !c.ended) finish(c, "missed", "কেউ ধরেনি");
+        if (!c.connected && !c.ended) finish(c, "missed", t("call.noAnswer"));
       }, RING_MS);
     } catch (err) {
-      finish(c, "ended", "কল শুরু করা যায়নি");
+      finish(c, "ended", t("call.startFail"));
     }
   }
 
@@ -466,12 +479,12 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     c.data = d;
     c.created = true;
     call = c;
-    showCall(c, d.video ? "ইনকামিং ভিডিও কল" : "ইনকামিং ভয়েস কল");
+    showCall(c, t(d.video ? "call.incomingVideo" : "call.incomingVoice"));
     startTone("in");
     if (document.hidden && "Notification" in window && Notification.permission === "granted") {
       try {
         const name = (getUsers().get(d.caller) || {}).name || "";
-        c.notif = new Notification(d.video ? "ইনকামিং ভিডিও কল" : "ইনকামিং ভয়েস কল", { body: name, icon: "icon-192.png", tag: "call-" + id, requireInteraction: true });
+        c.notif = new Notification(t(d.video ? "call.incomingVideo" : "call.incomingVoice"), { body: name, icon: "icon-192.png", tag: "call-" + id, requireInteraction: true });
         c.notif.onclick = () => {
           window.focus();
           c.notif.close();
@@ -481,7 +494,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
       }
     }
     c.ringTimer = setTimeout(() => {
-      if (!c.accepted && !c.ended) finish(c, "missed", "মিসড কল", true);
+      if (!c.accepted && !c.ended) finish(c, "missed", t("call.missed"), true);
     }, RING_MS + 5000);
   }
 
@@ -495,9 +508,9 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     $("callIn").hidden = true;
     $("callBar").hidden = false;
     startNativeAudio(c.video);
-    setStatus("সংযোগ হচ্ছে…");
+    setStatus(t("call.connecting"));
     if (!window.RTCPeerConnection || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      finish(c, "declined", "এই ডিভাইসে কল করা যাবে না");
+      finish(c, "declined", t("call.unsupported"));
       return;
     }
     let stream;
@@ -521,7 +534,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
       if (c.ended) return;
       const fresh = await getDoc(c.ref);
       if (!fresh.exists() || fresh.data().status !== "ringing") {
-        finish(c, "missed", "কলটি আগেই শেষ হয়ে গেছে", true);
+        finish(c, "missed", t("call.alreadyEnded"), true);
         return;
       }
       await updateDoc(c.ref, { answer: { type: answer.type, sdp: answer.sdp }, status: "active" });
@@ -529,7 +542,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
       flushOut(c);
       watchCall(c);
     } catch (err) {
-      finish(c, "ended", "কল ধরা যায়নি");
+      finish(c, "ended", t("call.answerFail"));
     }
   }
 
@@ -557,11 +570,11 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
 
   const outLabel = d => {
     const l = (d.label || "").toLowerCase();
-    if (/speaker/.test(l)) return "স্পিকার";
-    if (/earpiece|receiver/.test(l)) return "ইয়ারপিস";
-    if (/bluetooth/.test(l)) return "ব্লুটুথ";
-    if (/headphone|headset|wired/.test(l)) return "হেডফোন";
-    return d.label || "ডিফল্ট";
+    if (/speaker/.test(l)) return t("call.route.speaker");
+    if (/earpiece|receiver/.test(l)) return t("call.route.earpiece");
+    if (/bluetooth/.test(l)) return t("call.route.bluetooth");
+    if (/headphone|headset|wired/.test(l)) return t("call.route.headphones");
+    return d.label || t("call.route.default");
   };
 
   async function setupSpeaker() {
@@ -593,7 +606,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     }
     if (!askChoice) return;
     if (!canRoute) {
-      toast("এই ডিভাইসে অডিও আউটপুট বদলানো যায় না");
+      toast(t("call.audioUnsupported"));
       return;
     }
     let outs;
@@ -605,12 +618,12 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     }
     if (!outs.length) return;
     const value = await askChoice({
-      title: "অডিও আউটপুট",
-      text: "কল যেখান থেকে শুনবেন সেটা বেছে নিন",
+      title: t("call.audioTitle"),
+      text: t("call.audioText"),
       iconName: "users",
       options: [
         ...outs.map(d => ({ label: outLabel(d), value: d.deviceId, kind: "dcancel" })),
-        { label: "বাতিল", value: "", kind: "dcancel" }
+        { label: t("common.cancel"), value: "", kind: "dcancel" }
       ]
     });
     if (!value || !call) return;
@@ -619,7 +632,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
       const speakerLike = outs.find(d => d.deviceId === value && /speaker/i.test(d.label || ""));
       $("callSpeaker").classList.toggle("on", !!speakerLike);
     } catch {
-      toast("অডিও আউটপুট বদলানো যায়নি");
+      toast(t("call.audioFail"));
     }
   }
 
@@ -689,7 +702,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
         s = await open(prev);
         used = prev;
       } catch {
-        toast("ক্যামেরা বদলানো যায়নি");
+        toast(t("call.cameraFail"));
         return;
       }
     }
@@ -704,7 +717,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
       if (sender) await sender.replaceTrack(track);
     } catch {
       track.stop();
-      toast("ক্যামেরা বদলানো যায়নি");
+      toast(t("call.cameraFail"));
       return;
     }
     c.local.removeTrack(old);
@@ -723,7 +736,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
         if (ch.type === "removed") {
           const c = call;
           if (!c || c.dir !== "in" || c.id !== ch.doc.id || c.accepted || c.ended) return;
-          const text = d.status === "active" ? "অন্য ডিভাইসে ধরা হয়েছে" : "মিসড কল";
+          const text = d.status === "active" ? t("call.answeredElsewhere") : t("call.missed");
           finish(c, "missed", text, true);
           return;
         }

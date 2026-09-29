@@ -1,5 +1,6 @@
-import { isNative } from "./config.js";
+import { isNative, API_BASE } from "./config.js";
 import { checkForcedUpdate } from "./app-update.js";
+import { t } from "./i18n.js";
 
 const plugins = isNative ? window.Capacitor.Plugins || {} : {};
 
@@ -61,7 +62,8 @@ export function syncNativeSession(user, config) {
     apiKey: config.apiKey,
     projectId: config.projectId,
     uid: user.uid,
-    refreshToken: user.refreshToken
+    refreshToken: user.refreshToken,
+    apiBase: API_BASE
   }).catch(() => {});
 }
 
@@ -130,7 +132,7 @@ export function setupNative({ db, getDoc, doc, handleBack, openChat, notify, onR
     }
     exitArmed = true;
     if (Haptics) Haptics.notification({ type: "WARNING" }).catch(() => {});
-    notify("বের হতে আবার ব্যাক চাপুন");
+    notify(t("native.exitAgain"));
     clearTimeout(exitTimer);
     exitTimer = setTimeout(() => {
       exitArmed = false;
