@@ -1,7 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserPopupRedirectResolver, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserPopupRedirectResolver, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getMessaging, getToken, isSupported } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
 import { createCalls } from "./call.js";
+import { isNative } from "./config.js";
+import { setupNative, hideNativeSplash, applyStatusBar, setActiveChat, syncNativeSession, nativeGoogleIdToken, registerNativePush, initBatteryPrompt, consumePendingChat } from "./native.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, query, orderBy, where, limit, serverTimestamp, arrayUnion, arrayRemove, increment, writeBatch, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -171,6 +173,7 @@ const hadSession = localStorage.getItem("kotha-session") === "1";
 const hideSplash = () => {
   clearTimeout(splashTimer);
   $("splash").hidden = true;
+  hideNativeSplash();
 };
 const showSplash = () => {
   $("splash").hidden = false;
@@ -191,6 +194,7 @@ const toggleTheme = () => {
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
   localStorage.setItem("theme", next);
+  applyStatusBar(next !== "light");
 };
 
 const moreMenu = $("moreMenu");
@@ -259,9 +263,15 @@ $("authForm").onsubmit = async e => {
 
 $("googleBtn").onclick = async () => {
   try {
-    await signInWithPopup(auth, new GoogleAuthProvider());
+    if (isNative) {
+      const idToken = await nativeGoogleIdToken();
+      await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+    } else {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    }
   } catch (err) {
-    $("authErr").textContent = err.code.replace("auth/", "").replace(/-/g, " ");
+    const cancelled = /cancel/i.test(err.message || "");
+    $("authErr").textContent = cancelled ? "" : (err.code || "Google দিয়ে সাইন ইন করা যায়নি").replace("auth/", "").replace(/-/g, " ");
   }
 };
 
@@ -309,10 +319,12 @@ onAuthStateChanged(auth, async user => {
     $("authBtn").disabled = false;
     $("authBtn").textContent = signup ? "অ্যাকাউন্ট খুলুন" : "সাইন ইন করুন";
     localStorage.removeItem("kotha-session");
+    syncNativeSession(null, firebaseConfig);
     hideSplash();
     return;
   }
   localStorage.setItem("kotha-session", "1");
+  syncNativeSession(user, firebaseConfig);
   showSplash();
   $("auth").hidden = true;
   usersLoaded = false;
@@ -338,7 +350,8 @@ onAuthStateChanged(auth, async user => {
     toast("লোড করা যায়নি, ইন্টারনেট সংযোগ দেখুন");
   }
   $("app").hidden = false;
-  registerPush();
+  registerPush(true);
+  initBatteryPrompt();
   calls.start(user.uid);
   setPresence(true);
   unsubs.push(() => {
@@ -597,6 +610,7 @@ function closeChat() {
   chatUnsubs.forEach(u => u());
   chatUnsubs = [];
   active = null;
+  setActiveChat(null);
   $("pane").hidden = true;
   $("empty").hidden = false;
   $("app").classList.remove("in-chat");
@@ -618,6 +632,7 @@ async function openChat(peer, group) {
   if (!group && !chats.some(c => c.id === id)) await setDoc(ref, { members: [uid, peer.uid] }, { merge: true });
   goneCache.clear();
   active = { id, peer: group ? null : peer.uid, group: !!group, members: group ? group.members : [uid, peer.uid], reply: null, data: group || null, first: true, lastId: null, limit: PAGE, hasMore: false, olderLoad: false };
+  setActiveChat(id);
   $("empty").hidden = true;
   $("pane").hidden = false;
   $("app").classList.add("in-chat");
@@ -1188,23 +1203,32 @@ function notify(c, id) {
   };
 }
 document.addEventListener("click", () => {
-  if ("Notification" in window && Notification.permission === "default") {
+  if (!isNative && "Notification" in window && Notification.permission === "default") {
     Notification.requestPermission().then(p => {
       if (p === "granted") registerPush();
     });
   }
 }, { once: true });
 
-async function registerPush() {
+async function savePushToken(token) {
+  if (!token || !auth.currentUser) return;
+  localStorage.setItem("kotha-push", token);
+  await setDoc(doc(db, "pushTokens", auth.currentUser.uid), { tokens: arrayUnion(token) }, { merge: true }).catch(() => {});
+}
+
+async function registerPush(requestPermission = false) {
+  if (isNative) {
+    const token = await registerNativePush({ requestPermission, onToken: savePushToken }).catch(() => null);
+    await savePushToken(token);
+    return;
+  }
   if (VAPID_KEY.startsWith("YOUR_") || !("Notification" in window) || !("serviceWorker" in navigator)) return;
   if (Notification.permission !== "granted" || !auth.currentUser) return;
   try {
     if (!(await isSupported())) return;
     const reg = await navigator.serviceWorker.ready;
     const token = await getToken(getMessaging(app), { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
-    if (!token) return;
-    localStorage.setItem("kotha-push", token);
-    await setDoc(doc(db, "pushTokens", auth.currentUser.uid), { tokens: arrayUnion(token) }, { merge: true });
+    await savePushToken(token);
   } catch (err) {
     return;
   }
@@ -1409,7 +1433,7 @@ const calls = createCalls({
   askChoice
 });
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if (!isNative && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
 document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -1424,6 +1448,41 @@ document.addEventListener("keydown", e => {
   else if (!$("emojiPanel").hidden) $("emojiPanel").hidden = true;
   else if (active) closeChat();
 });
+
+const openChatFromNative = id => {
+  if (id && !openChatById(id)) pendingChat = id;
+};
+
+const handleBack = () => {
+  if (!$("confirm").hidden) { closeConfirm(false); return true; }
+  if (!$("choice").hidden) { closeChoice(null); return true; }
+  if (!$("msgMenu").hidden) { closeMenu(); return true; }
+  if (!moreMenu.hidden) { closeMore(); return true; }
+  if (!$("lightbox").hidden) { $("lightbox").hidden = true; return true; }
+  if (!$("findSheet").hidden) { closeFind(); return true; }
+  if (!$("sheet").hidden) { $("sheet").hidden = true; return true; }
+  if (!$("emojiPanel").hidden) { $("emojiPanel").hidden = true; return true; }
+  const callState = calls.busy();
+  if (callState) {
+    toast(callState === "in" ? "কলটি ধরুন বা প্রত্যাখ্যান করুন" : "কল চলছে। শেষ করতে লাল বাটন চাপুন");
+    return true;
+  }
+  if (!$("replyBar").hidden) { clearReply(); return true; }
+  if (active) { closeChat(); renderList(); return true; }
+  return false;
+};
+
+setupNative({
+  db,
+  getDoc,
+  doc,
+  handleBack,
+  openChat: openChatFromNative,
+  notify: text => toast(text),
+  onResume: () => setActiveChat(active?.id || null)
+});
+
+consumePendingChat().then(openChatFromNative);
 
 function closeSearchFocus() {
   $("search").focus();

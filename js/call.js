@@ -1,3 +1,5 @@
+import { API_BASE, isNative } from "./config.js";
+
 const RING_MS = 45000;
 const STALE_MS = 90000;
 const DROP_MS = 12000;
@@ -28,6 +30,21 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
   let canRoute = false;
 
   const myUid = () => auth.currentUser?.uid || "";
+  const nativeAudio = isNative ? window.Capacitor.Plugins?.CallAudio || null : null;
+
+  const syncNativeSpeaker = () => {
+    if (!nativeAudio) return;
+    nativeAudio.isSpeaker().then(r => $("callSpeaker").classList.toggle("on", !!r.on)).catch(() => {});
+  };
+
+  const startNativeAudio = video => {
+    if (!nativeAudio) return;
+    nativeAudio.start({ speaker: !!video }).then(syncNativeSpeaker).catch(() => {});
+  };
+
+  const stopNativeAudio = () => {
+    if (nativeAudio) nativeAudio.stop().catch(() => {});
+  };
 
   const newCall = base => ({
     ...base,
@@ -113,7 +130,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     if (iceCache && iceCache.exp > Date.now()) return iceCache.servers;
     try {
       const token = await auth.currentUser.getIdToken();
-      const r = await fetch("/api/turn", {
+      const r = await fetch(API_BASE + "/api/turn", {
         headers: { Authorization: "Bearer " + token },
         cache: "no-store",
         signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined
@@ -368,6 +385,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
       c.pc.close();
     }
     if (c.local) c.local.getTracks().forEach(t => t.stop());
+    stopNativeAudio();
     if (c.created && !remote) {
       const status = reason === "declined" || reason === "missed" ? reason : "ended";
       updateDoc(c.ref, { status, endedAt: serverTimestamp(), endReason: reason }).catch(() => {});
@@ -394,6 +412,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     call = c;
     showCall(c, "কল হচ্ছে…");
     startTone("out");
+    startNativeAudio(video);
     let stream;
     let ice;
     try {
@@ -475,6 +494,7 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     if (c.notif) c.notif.close();
     $("callIn").hidden = true;
     $("callBar").hidden = false;
+    startNativeAudio(c.video);
     setStatus("সংযোগ হচ্ছে…");
     if (!window.RTCPeerConnection || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       finish(c, "declined", "এই ডিভাইসে কল করা যাবে না");
@@ -545,6 +565,11 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
   };
 
   async function setupSpeaker() {
+    if (nativeAudio) {
+      canRoute = true;
+      $("callSpeaker").classList.remove("dim");
+      return;
+    }
     canRoute = false;
     $("callSpeaker").classList.add("dim");
     if (!("setSinkId" in HTMLMediaElement.prototype) || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
@@ -559,7 +584,14 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
   }
 
   async function pickSpeaker() {
-    if (!call || !askChoice) return;
+    if (!call) return;
+    if (nativeAudio) {
+      const state = await nativeAudio.isSpeaker().catch(() => ({ on: false }));
+      await nativeAudio.setSpeaker({ on: !state.on }).catch(() => {});
+      syncNativeSpeaker();
+      return;
+    }
+    if (!askChoice) return;
     if (!canRoute) {
       toast("এই ডিভাইসে অডিও আউটপুট বদলানো যায় না");
       return;
@@ -734,5 +766,10 @@ export function createCalls({ auth, db, fs, $, toast, pic, getActive, getUsers, 
     if (call && call.created && !call.ended) hangup("ended");
   });
 
-  return { start, stop };
+  const busy = () => {
+    if (!call) return "";
+    return call.dir === "in" && !call.accepted ? "in" : "on";
+  };
+
+  return { start, stop, busy };
 }
