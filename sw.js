@@ -1,5 +1,5 @@
-const CACHE = "kotha-v20";
-const SHELL = ["./", "index.html", "css/style.css", "js/app.js", "js/call.js", "icon.svg", "icon-192.png"];
+const CACHE = "kotha-v21";
+const SHELL = ["./", "index.html", "css/style.css", "js/app.js", "js/call.js", "js/i18n.js", "js/push-trigger.js", "icon.svg", "icon-192.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

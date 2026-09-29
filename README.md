@@ -8,11 +8,14 @@ Firebase (Auth + Firestore + Cloud Messaging) ও Cloudinary ভিত্তি�
 | --- | --- |
 | `index.html`, `css/style.css`, `js/app.js`, `js/call.js` | অ্যাপ (call.js হলো কল সিস্টেম) |
 | `api/turn.js` | কলের জন্য TURN ক্রেডেনশিয়াল (Vercel Function) |
+| `api/notify.js` | মেসেজ ও কলের পুশ নোটিফিকেশন পাঠায় (Vercel Function, Firebase Admin) |
+| `js/i18n.js` | ইংরেজি/বাংলা ভাষা সুইচ (ডিফল্ট ইংরেজি) |
+| `js/push-trigger.js` | মেসেজ/কল লেখার পর `api/notify` ডাকার helper |
 | `sw.js` | সার্ভিস ওয়ার্কার (অফলাইন ক্যাশ ও পুশ নোটিফিকেশন) |
 | `manifest.json`, `icon*.png/svg` | PWA ইনস্টল |
 | `vercel.json`, `.vercelignore` | Vercel কনফিগ (শুধু অ্যাপের ফাইল ডিপ্লয় হয়) |
 | `android/`, `tools/inject_android.py`, `.github/workflows/android.yml` | Android APK (বিস্তারিত `android/README.md`-তে) |
-| `firestore.rules`, `firebase.json`, `functions/` | Firebase-এ আলাদাভাবে ডিপ্লয় হয়, Vercel-এ নয় |
+| `firestore.rules`, `firebase.json` | Firebase-এ আলাদাভাবে ডিপ্লয় হয়, Vercel-এ নয় |
 
 ## GitHub-এ আপলোড
 
@@ -41,7 +44,7 @@ git push -u origin main
 3. **Cloudinary:** `app.js`-এ `CLOUD_NAME` ও `UPLOAD_PRESET` বসান (আনসাইনড প্রিসেট লাগবে)।
 4. **পুশ নোটিফিকেশন (ঐচ্ছিক):**
    - Firebase Console → Project settings → Cloud Messaging → Web Push certificates থেকে কী নিয়ে `app.js`-এর `VAPID_KEY`-তে বসান।
-   - `cd functions && npm install`, তারপর প্রজেক্ট রুটে `firebase deploy --only functions`। এর জন্য Blaze প্ল্যান লাগে।
+   - Firebase Console → Project settings → Service accounts → Generate new private key থেকে JSON নামিয়ে পুরো লেখাটি Vercel → Settings → Environment Variables-এ `FIREBASE_SERVICE_ACCOUNT` নামে বসান, তারপর Redeploy করুন। Cloud Functions বা Blaze প্ল্যান লাগে না।
 5. **API কী সুরক্ষা (প্রস্তাবিত):** Google Cloud Console → APIs & Services → Credentials-এ Firebase Browser Key-এর HTTP referrer সীমা আপনার ডোমেইনে বেঁধে দিন। Firebase-এর ওয়েব কনফিগ গোপন তথ্য নয়, আসল সুরক্ষা আসে Firestore নিয়ম থেকে।
 
 ## ভয়েস ও ভিডিও কল
@@ -55,7 +58,7 @@ git push -u origin main
    - `METERED_API_KEY`: আপনার API key
 4. Vercel-এ Redeploy করুন।
 5. `firestore.rules` আবার পাবলিশ করুন।
-6. অ্যাপ বন্ধ থাকলে কলের নোটিফিকেশনের জন্য `firebase deploy --only functions` (`notifyCall` ফাংশন)।
+6. অ্যাপ বন্ধ থাকলে কলের নোটিফিকেশনের জন্য উপরের `FIREBASE_SERVICE_ACCOUNT` বসানো থাকলেই হবে (`api/notify.js` কাজটি করে)।
 
 ভেরিয়েবল না দিলে শুধু Google STUN ব্যবহার হবে, তখন অনেক নেটওয়ার্কে কল সংযোগ নাও হতে পারে। ২০ GB মাসিক কোটা শেষ হলে TURN কাজ করবে না যতক্ষণ না পরের মাস শুরু হয় বা আপগ্রেড করেন।
 

@@ -4,11 +4,10 @@ firebase.json
 firestore.rules
 README.md
 ANDROID.md
+ANDROID-step5.md
 .github
 android
 resources
 scripts
-package.json
-package-lock.json
 capacitor.config.json
 www

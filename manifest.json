@@ -2,7 +2,7 @@
   "id": "./index.html",
   "name": "কথা",
   "short_name": "কথা",
-  "lang": "bn",
+  "lang": "en",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
