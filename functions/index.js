@@ -32,11 +32,19 @@ exports.notifyMessage = onDocumentCreated("chats/{chatId}/messages/{messageId}",
     const res = await getMessaging().sendEachForMulticast({
       tokens,
       data: {
+        type: "message",
         title: chat.group ? chat.name || "গ্রুপ" : senderName,
         body: chat.group ? `${senderName}: ${body}` : body,
-        chatId
+        chatId,
+        senderUid: message.from || "",
+        senderName,
+        senderPhoto: senderSnap.exists ? senderSnap.data().photo || "" : "",
+        text: body,
+        group: chat.group ? "1" : "0",
+        chatName: chat.group ? chat.name || "" : ""
       },
-      webpush: { headers: { Urgency: "high", TTL: "86400" } }
+      webpush: { headers: { Urgency: "high", TTL: "86400" } },
+      android: { priority: "high", ttl: 86400000 }
     });
     const dead = [];
     res.responses.forEach((r, i) => {
@@ -64,7 +72,8 @@ exports.notifyCall = onDocumentCreated("calls/{callId}", async event => {
       body: callerName,
       chatId: call.chatId || ""
     },
-    webpush: { headers: { Urgency: "high", TTL: "60" } }
+    webpush: { headers: { Urgency: "high", TTL: "60" } },
+    android: { priority: "high", ttl: 60000 }
   });
   const dead = [];
   res.responses.forEach((r, i) => {
