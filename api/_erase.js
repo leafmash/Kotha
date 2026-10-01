@@ -96,7 +96,11 @@ const eraseUser = async ({ db, auth, FieldValue, uid, email, cloudinary, fetchIm
       [`unread.${uid}`]: FieldValue.delete(),
       [`typing.${uid}`]: FieldValue.delete()
     };
-    if (chat.admin === uid) patch.admin = remaining[0];
+    let admins = (chat.admins || []).filter(m => remaining.includes(m));
+    const admin = remaining.includes(chat.admin) ? chat.admin : admins[0] || remaining[0];
+    if (!admins.includes(admin)) admins = [...admins, admin];
+    patch.admin = admin;
+    patch.admins = admins;
     if (chat.lastFrom === uid) {
       patch.lastMessage = "[[deleted]]";
       patch.lastFrom = "";
