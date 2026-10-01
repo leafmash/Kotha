@@ -21,6 +21,7 @@ const CLOUD_NAME = "YOUR_CLOUDINARY_CLOUD_NAME";
 const UPLOAD_PRESET = "YOUR_UNSIGNED_UPLOAD_PRESET";
 const VAPID_KEY = "YOUR_WEB_PUSH_VAPID_KEY";
 const PAGE = 50;
+const GROUP_MAX = 256;
 
 const app = initializeApp(firebaseConfig);
 const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence], popupRedirectResolver: browserPopupRedirectResolver });
@@ -76,18 +77,15 @@ const callLogText = log => {
   return icon + " " + t("call.logMissed", { label });
 };
 const callEventKind = (log, mine) => (!mine && log.kind === "cancelled" ? "missed" : log.kind);
-const callEventText = (log, mine) => {
+const callEventParts = (log, mine) => {
   const label = t(log.video ? "call.video" : "call.voice");
   const secs = Number(log.secs) || 0;
   const kind = callEventKind(log, mine);
-  if (kind === "done") {
-    const base = t(mine ? "call.outgoing" : "call.incoming", { label });
-    return secs ? base + " · " + Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0") : base;
-  }
-  if (kind === "declined") return t("call.logDeclined", { label });
-  if (kind === "cancelled") return t("call.logCancelled", { label });
-  if (mine) return t("call.outgoing", { label }) + " · " + t("call.noAnswer");
-  return t("call.logMissed", { label });
+  if (kind === "done") return { title: label, sub: secs ? Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0") : "" };
+  if (kind === "declined") return { title: t("call.logDeclined", { label }), sub: "" };
+  if (kind === "cancelled") return { title: t("call.logCancelled", { label }), sub: "" };
+  if (mine) return { title: label, sub: t("call.noAnswer") };
+  return { title: t("call.logMissed", { label }), sub: "" };
 };
 const lastText = value => displayStored(value);
 
@@ -180,6 +178,7 @@ addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   closeConfirm(false);
   closeChoice(null);
+  closeEdit(null);
   closeMenu();
   closeMore();
   closeChatMenu();
@@ -311,6 +310,7 @@ onLangChange(() => {
       if (lastMessageDocs) renderMessages(lastMessageDocs);
     }
     if (!$("sheet").hidden) syncGroupUi();
+    if (!$("infoSheet").hidden) renderGroupInfo();
     if (!$("findSheet").hidden) renderFind();
     if (!moreMenu.hidden) openMore();
     if (!chatMenu.hidden) openChatMenu();
@@ -483,6 +483,11 @@ onAuthStateChanged(auth, async user => {
       const stamp = c.lastAt?.seconds || 0;
       const prev = lastAtSeen.get(ch.doc.id) || 0;
       lastAtSeen.set(ch.doc.id, stamp);
+      if (ch.type === "removed" && active?.group && active.id === ch.doc.id) {
+        closeChat();
+        toast(t("group.removedYou"));
+        return;
+      }
       if (initial || !stamp || stamp <= prev || c.lastFrom === user.uid || blocked.has(c.lastFrom)) return;
       if ((document.hidden || active?.id !== ch.doc.id) && !isMuted(ch.doc.id)) notify(c, ch.doc.id);
     });
@@ -685,7 +690,7 @@ function renderList() {
     const body = el("div", "body");
     body.append(el("b", "", t("list.newGroupTitle")), el("span", "sub", t("list.newGroupSub")));
     r.append(av, body);
-    r.onclick = openGroupSheet;
+    r.onclick = () => openGroupSheet();
     list.append(r);
   }
 
@@ -850,6 +855,8 @@ function closeChat() {
   chatUnsubs = [];
   active = null;
   setActiveChat(null);
+  $("infoSheet").hidden = true;
+  $("editBox").hidden = true;
   $("pane").hidden = true;
   $("empty").hidden = false;
   $("app").classList.remove("in-chat");
@@ -885,6 +892,7 @@ async function openChat(peer, group) {
   chatUnsubs.push(onSnapshot(ref, s => {
     if (!active || active.id !== id) return;
     active.data = s.data();
+    if (active.group && Array.isArray(active.data?.members)) active.members = active.data.members;
     renderPeer();
     markRead();
     renderList();
@@ -904,7 +912,7 @@ function listenMessages() {
     target.hasMore = s.docs.length >= target.limit;
     lastMessageDocs = s.docs.slice().reverse();
     renderMessages(lastMessageDocs);
-    const unseen = s.docs.filter(d => d.data().from !== uid && d.data().status !== "seen");
+    const unseen = s.docs.filter(d => d.data().from !== uid && d.data().type !== "system" && d.data().status !== "seen");
     if (unseen.length) {
       const batch = writeBatch(db);
       unseen.forEach(d => batch.update(d.ref, { status: "seen" }));
@@ -932,6 +940,8 @@ function renderPeer() {
   const locked = !active.group && blocked.has(active.peer);
   $("composer").hidden = locked;
   $("blockBar").hidden = !locked;
+  $("roBar").hidden = true;
+  $("pane").classList.toggle("ingroup", !!active.group);
   if (locked) {
     $("emojiPanel").hidden = true;
     clearReply();
@@ -946,6 +956,14 @@ function renderPeer() {
     $("peerName").textContent = g.name || "";
     $("peerStatus").classList.toggle("live", typers.length > 0);
     $("peerStatus").textContent = typers.length ? t("chat.typingMany", { names: typers.join(", ") }) : t("chat.members", { n: fmtNumber(g.members?.length || 0) });
+    const readOnly = g.adminOnly === true && !iAmAdmin(g);
+    $("composer").hidden = readOnly;
+    $("roBar").hidden = !readOnly;
+    if (readOnly) {
+      $("emojiPanel").hidden = true;
+      clearReply();
+    }
+    if (!$("infoSheet").hidden) renderGroupInfo();
     return;
   }
   const peer = users.get(active.peer);
@@ -995,6 +1013,13 @@ function renderMessages(all) {
       box.append(el("div", "day", dayLabel(date)));
       prevFrom = null;
     }
+    if (m.type === "system" && m.sys && typeof m.sys === "object" && !m.deleted) {
+      const ev = el("div", "sysev", sysText(m.sys, m.from));
+      ev.id = "m-" + d.id;
+      box.append(ev);
+      prevFrom = null;
+      return;
+    }
     if (active.group && !mine && blocked.has(m.from)) {
       if (!hiddenRun) box.append(el("div", "day hidden-note", t("block.hiddenMessage")));
       hiddenRun = true;
@@ -1007,7 +1032,13 @@ function renderMessages(all) {
       const bad = !mine && ["missed", "cancelled"].includes(log.kind);
       const ev = el("div", "callev " + (mine ? "mine" : "theirs") + (bad ? " bad" : ""));
       ev.id = "m-" + d.id;
-      ev.append(icon(mine ? "arrowOut" : "arrowIn", "dirico"), icon(log.video ? "video" : "phone"), el("span", "", callEventText(log, mine)), el("time", "", clock(m.at)));
+      const parts = callEventParts(log, mine);
+      const cic = el("span", "cic");
+      cic.append(icon(log.video ? "video" : "phone"));
+      const cbody = el("span", "cbody");
+      cbody.append(el("b", "", parts.title));
+      if (parts.sub) cbody.append(el("small", "", parts.sub));
+      ev.append(cic, cbody, el("time", "", clock(m.at)));
       ev.onclick = () => {
         if (!active || active.group || $("hcalls").hidden) return;
         calls.startCall(!!log.video, active);
@@ -1665,6 +1696,7 @@ let groupExtra = new Map();
 let groupPicked = new Set();
 let groupFindTimer;
 let groupFindToken = 0;
+let groupSheetMode = "create";
 const groupUser = id => users.get(id) || groupExtra.get(id);
 
 async function lookupEmail(term) {
@@ -1687,7 +1719,8 @@ function groupContacts() {
   const me = auth.currentUser.uid;
   const ids = new Set(chats.filter(c => !c.group).map(c => c.members.find(m => m !== me)));
   groupExtra.forEach((u, id) => ids.add(id));
-  return [...ids].filter(id => !blocked.has(id)).map(id => users.get(id) || groupExtra.get(id)).filter(Boolean);
+  const existing = groupSheetMode === "add" && active?.group ? new Set(active.data?.members || []) : null;
+  return [...ids].filter(id => !blocked.has(id) && !(existing && existing.has(id))).map(id => users.get(id) || groupExtra.get(id)).filter(Boolean);
 }
 
 let lastPicked = 0;
@@ -1716,7 +1749,7 @@ function syncGroupUi() {
   if (groupPicked.size > lastPicked) requestAnimationFrame(() => strip.scrollTo({ left: strip.scrollWidth, behavior: "smooth" }));
   lastPicked = groupPicked.size;
   $("sheetCount").textContent = groupPicked.size ? t("group.selected", { n: fmtNumber(groupPicked.size) }) : t("group.pickMembers");
-  $("sheetDone").classList.toggle("off", !($("groupName").value.trim() && groupPicked.size));
+  $("sheetDone").classList.toggle("off", groupSheetMode === "add" ? !groupPicked.size : !($("groupName").value.trim() && groupPicked.size));
 }
 
 function renderMembers() {
@@ -1760,6 +1793,10 @@ function renderGroupFind(r) {
     return;
   }
   const u = r.user;
+  if (groupSheetMode === "add" && active?.group && (active.data?.members || []).includes(u.uid)) {
+    box.append(el("p", "hint", t("group.alreadyIn")));
+    return;
+  }
   const already = groupPicked.has(u.uid);
   const row = el("div", "pick found");
   const img = el("img");
@@ -1796,7 +1833,13 @@ $("groupFind").oninput = () => {
   }, 300);
 };
 
-const openGroupSheet = () => {
+const openGroupSheet = mode => {
+  groupSheetMode = mode === "add" ? "add" : "create";
+  const add = groupSheetMode === "add";
+  $("gnameRow").hidden = add;
+  $("sheetTitle").dataset.i18n = add ? "group.addTitle" : "menu.newGroup";
+  $("sheetDone").dataset.i18n = add ? "group.add" : "group.create";
+  applyStatic($("sheet"));
   $("groupName").value = "";
   $("groupFind").value = "";
   groupExtra = new Map();
@@ -1811,6 +1854,20 @@ const openGroupSheet = () => {
 $("groupName").oninput = syncGroupUi;
 $("sheetClose").onclick = () => { $("sheet").hidden = true; };
 $("sheetDone").onclick = async () => {
+  if (groupSheetMode === "add") {
+    if (!active?.group || !groupPicked.size) return;
+    const have = new Set(active.data?.members || []);
+    const ids = [...groupPicked].filter(id => !have.has(id));
+    if (!ids.length) return;
+    if (have.size + ids.length > GROUP_MAX) {
+      toast(t("group.full"));
+      return;
+    }
+    const names = ids.map(id => groupUser(id)?.name || t("common.user"));
+    $("sheet").hidden = true;
+    addGroupMembers(active.id, ids, names).then(() => toast(t("group.added"))).catch(() => toast(t("group.actionFail")));
+    return;
+  }
   const uid = auth.currentUser.uid;
   const name = $("groupName").value.trim();
   const picked = [...groupPicked];
@@ -1819,10 +1876,219 @@ $("sheetDone").onclick = async () => {
     return;
   }
   const members = [uid, ...picked];
-  const ref = await addDoc(collection(db, "chats"), { group: true, name, admin: uid, members, lastMessage: stored("groupCreated"), lastFrom: uid, lastAt: serverTimestamp() });
+  const ref = await addDoc(collection(db, "chats"), { group: true, name, admin: uid, admins: [uid], members, lastMessage: stored("groupCreated"), lastFrom: uid, lastAt: serverTimestamp() });
   $("sheet").hidden = true;
   openChat(null, { id: ref.id, name, members });
 };
+
+
+const groupAdminIds = g => [...new Set([g?.admin, ...(g?.admins || [])].filter(id => id && (g.members || []).includes(id)))];
+const iAmAdmin = g => !!auth.currentUser && groupAdminIds(g).includes(auth.currentUser.uid);
+const memberName = id => users.get(id)?.name || t("common.user");
+const runGroup = fn => fn().catch(() => toast(t("group.actionFail")));
+
+function groupBatch(chatId, sys, patch) {
+  const uid = auth.currentUser.uid;
+  const batch = writeBatch(db);
+  if (sys) {
+    batch.set(doc(collection(db, "chats", chatId, "messages")), {
+      from: uid,
+      type: "system",
+      text: "",
+      at: serverTimestamp(),
+      sys: { by: users.get(uid)?.name || "", ...sys }
+    });
+  }
+  batch.update(doc(db, "chats", chatId), patch);
+  return batch.commit();
+}
+
+function addGroupMembers(chatId, ids, names) {
+  return groupBatch(chatId, { kind: "added", target: ids, names }, {
+    members: arrayUnion(...ids),
+    lastMessage: stored("membersAdded"),
+    lastFrom: auth.currentUser.uid,
+    lastAt: serverTimestamp()
+  });
+}
+
+function removeGroupMember(chatId, id, g) {
+  const patch = { members: arrayRemove(id), ["unread." + id]: deleteField(), ["typing." + id]: deleteField() };
+  if ((g.admins || []).includes(id)) patch.admins = arrayRemove(id);
+  return groupBatch(chatId, { kind: "removed", target: [id], names: [memberName(id)] }, patch);
+}
+
+function setGroupAdmin(chatId, id, make) {
+  return groupBatch(chatId, { kind: make ? "promoted" : "demoted", target: [id], names: [memberName(id)] }, { admins: make ? arrayUnion(id) : arrayRemove(id) });
+}
+
+function sysText(sys, from) {
+  const uid = auth.currentUser.uid;
+  const by = from === uid ? t("common.you") : users.get(from)?.name || sys.by || t("common.user");
+  const targets = Array.isArray(sys.target) ? sys.target : [];
+  const list = targets.map((id, i) => (id === uid ? t("sys.youObj") : users.get(id)?.name || (sys.names || [])[i] || t("common.user")));
+  const names = targets.length === 1 && targets[0] === uid ? t("sys.youFull") : t("sys.obj", { name: list.join(", ") });
+  return t("sys." + sys.kind, { by, names, name: sys.name || "" });
+}
+
+const editBox = $("editBox");
+let editDone;
+let editMulti = false;
+function closeEdit(value) {
+  if (editBox.hidden) return;
+  editBox.hidden = true;
+  const done = editDone;
+  editDone = null;
+  if (done) done(value);
+}
+const askEdit = ({ title, value, max, multiline }) => new Promise(resolve => {
+  closeEdit(null);
+  editMulti = !!multiline;
+  $("editTitle").textContent = title;
+  const inp = $("editInput");
+  inp.maxLength = max;
+  inp.rows = multiline ? 4 : 2;
+  inp.value = value;
+  editDone = resolve;
+  editBox.hidden = false;
+  inp.focus();
+  inp.setSelectionRange(inp.value.length, inp.value.length);
+});
+$("editOk").onclick = () => {
+  const v = $("editInput").value;
+  closeEdit(editMulti ? v.trim() : v.replace(/\s*\n\s*/g, " ").trim());
+};
+$("editCancel").onclick = () => closeEdit(null);
+editBox.onclick = e => { if (e.target === editBox) closeEdit(null); };
+
+function renderGroupInfo() {
+  if (!active?.group) return;
+  const g = active.data || {};
+  const uid = auth.currentUser.uid;
+  const admin = iAmAdmin(g);
+  const admins = groupAdminIds(g);
+  const ids = [...(g.members || [])].sort((a, b) => admins.includes(b) - admins.includes(a));
+  $("infoImg").src = pic({ name: g.name, photo: g.photo });
+  $("infoAvatar").classList.toggle("edit", admin);
+  $("infoCam").hidden = !admin;
+  $("infoName").textContent = g.name || "";
+  $("infoTitleRow").classList.toggle("edit", admin);
+  $("infoNameEdit").hidden = !admin;
+  $("infoCount").textContent = t("chat.members", { n: fmtNumber(ids.length) });
+  const desc = (g.description || "").trim();
+  const d = $("infoDesc");
+  d.textContent = desc || (admin ? t("ginfo.addDescription") : t("ginfo.noDescription"));
+  d.className = "gdesc" + (desc ? "" : admin ? " edit" : " empty");
+  $("infoAdminOnly").hidden = !admin;
+  $("infoAdminOnlySwitch").classList.toggle("on", g.adminOnly === true);
+  $("infoMembersLabel").textContent = t("ginfo.membersLabel", { n: fmtNumber(ids.length) });
+  $("infoAdd").hidden = !admin;
+  const box = $("infoMembers");
+  box.replaceChildren();
+  ids.forEach(id => {
+    const u = users.get(id);
+    const row = el("div", "mrow" + (id === uid ? " nohit" : ""));
+    const img = el("img");
+    img.src = pic(u || { name: "?" });
+    img.alt = "";
+    const nm = el("div", "mn");
+    nm.append(el("span", "", u?.name || t("common.user")));
+    if (id === uid) nm.append(el("em", "", "(" + t("common.you") + ")"));
+    if (admins.includes(id)) nm.append(el("span", "apill", t("group.admin")));
+    row.append(img, nm);
+    if (id !== uid) row.onclick = () => memberActions(id);
+    box.append(row);
+  });
+}
+
+function openGroupInfo() {
+  if (!active?.group) return;
+  renderGroupInfo();
+  $("infoSheet").querySelector(".gbody").scrollTop = 0;
+  $("infoSheet").hidden = false;
+}
+
+async function memberActions(id) {
+  if (!active?.group) return;
+  const chatId = active.id;
+  const g = active.data || {};
+  const admin = iAmAdmin(g);
+  const isAdminTarget = groupAdminIds(g).includes(id);
+  const isOwner = g.admin === id;
+  const name = memberName(id);
+  const options = [];
+  if (users.get(id) && !blocked.has(id)) options.push({ label: t("member.message", { name }), value: "msg", kind: "dnorm" });
+  if (admin && !isOwner) {
+    options.push({ label: t(isAdminTarget ? "member.removeAdmin" : "member.makeAdmin"), value: isAdminTarget ? "demote" : "promote", kind: "dnorm" });
+    options.push({ label: t("member.remove"), value: "remove", kind: "dok" });
+  }
+  options.push({ label: t("common.cancel"), value: null, kind: "dcancel" });
+  if (options.length === 1) return;
+  const choice = await askChoice({ title: name, text: isAdminTarget ? t("group.admin") : "", iconName: "users", options });
+  if (!choice || !active?.group || active.id !== chatId) return;
+  if (choice === "msg") {
+    $("infoSheet").hidden = true;
+    openChat(users.get(id));
+  } else if (choice === "promote" || choice === "demote") {
+    runGroup(() => setGroupAdmin(chatId, id, choice === "promote"));
+  } else if (choice === "remove") {
+    const ok = await askConfirm({ title: t("member.removeTitle", { name }), text: t("member.removeText"), ok: t("member.remove"), iconName: "logout" });
+    if (ok) runGroup(() => removeGroupMember(chatId, id, g));
+  }
+}
+
+async function editGroupName() {
+  if (!active?.group || !iAmAdmin(active.data)) return;
+  const chatId = active.id;
+  const cur = active.data?.name || "";
+  const v = await askEdit({ title: t("ginfo.editName"), value: cur, max: 40, multiline: false });
+  if (!v || v === cur) return;
+  runGroup(() => groupBatch(chatId, { kind: "renamed", name: v }, { name: v }));
+}
+
+async function editGroupDesc() {
+  if (!active?.group || !iAmAdmin(active.data)) return;
+  const chatId = active.id;
+  const cur = active.data?.description || "";
+  const v = await askEdit({ title: t("ginfo.editDesc"), value: cur, max: 300, multiline: true });
+  if (v === null || v === cur.trim()) return;
+  runGroup(() => groupBatch(chatId, { kind: "desc" }, { description: v }));
+}
+
+$("infoClose").onclick = () => { $("infoSheet").hidden = true; };
+$("infoTitleRow").onclick = editGroupName;
+$("infoDesc").onclick = editGroupDesc;
+$("infoAdd").onclick = () => openGroupSheet("add");
+$("infoLeave").onclick = () => leaveGroup();
+$("infoReport").onclick = () => reportGroup();
+$("infoAdminOnly").onclick = () => {
+  if (!active?.group || !iAmAdmin(active.data)) return;
+  runGroup(() => updateDoc(doc(db, "chats", active.id), { adminOnly: active.data?.adminOnly !== true }));
+};
+$("infoAvatar").onclick = () => {
+  if (active?.group && iAmAdmin(active.data)) $("groupPhotoInput").click();
+};
+$("groupPhotoInput").onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file || !active?.group || !iAmAdmin(active.data)) return;
+  if (!navigator.onLine) {
+    toast(t("chat.offlineMedia"));
+    return;
+  }
+  const chatId = active.id;
+  toast(t("photo.uploading"), true);
+  try {
+    const res = await upload(await compressImage(file, 640, 0.85));
+    await groupBatch(chatId, { kind: "photo" }, { photo: res.secure_url });
+    toast(t("photo.changed"));
+  } catch (err) {
+    toast(err.message || t("group.actionFail"));
+  }
+};
+const openInfoFromHeader = () => { if (active?.group) openGroupInfo(); };
+$("peerAv").onclick = openInfoFromHeader;
+document.querySelector("#pane > header .who").onclick = openInfoFromHeader;
 
 const peerIdOf = (c, uid) => c.members.find(m => m !== uid);
 const nameOf = id => users.get(id)?.name || t("common.user");
@@ -1940,10 +2206,22 @@ async function leaveGroup() {
   if (!active?.group) return;
   const ok = await askConfirm({ title: t("group.leaveTitle"), text: t("group.leaveText"), ok: t("group.leave"), iconName: "logout" });
   if (!ok || !active?.group) return;
+  const uid = auth.currentUser.uid;
   const id = active.id;
+  const g = active.data || {};
+  const rest = (g.members || []).filter(m => m !== uid);
+  const admins = groupAdminIds(g);
+  const patch = { members: arrayRemove(uid) };
+  if (admins.includes(uid) && rest.length) {
+    const others = admins.filter(m => m !== uid);
+    const successor = others[0] || rest[0];
+    if (g.admin === uid) patch.admin = successor;
+    if (!others.length) patch.admins = [successor];
+    else if ((g.admins || []).includes(uid)) patch.admins = (g.admins || []).filter(m => m !== uid);
+  }
   closeChat();
   renderList();
-  updateDoc(doc(db, "chats", id), { members: arrayRemove(auth.currentUser.uid) }).catch(() => toast(t("group.leaveFail")));
+  groupBatch(id, { kind: "left" }, patch).catch(() => toast(t("group.leaveFail")));
   toast(t("group.left"));
 }
 
@@ -1999,6 +2277,7 @@ function openChatMenu() {
   if (!active) return;
   const items = [];
   if (active.group) {
+    items.push({ icon: "users", label: t("ginfo.title"), fn: openGroupInfo });
     items.push({ icon: "flag", label: t("report.group"), fn: reportGroup });
     items.push({ icon: "logout", label: t("group.leave"), fn: leaveGroup, danger: true });
   } else {
@@ -2247,6 +2526,7 @@ document.addEventListener("keydown", e => {
   else if (!$("settingsSheet").hidden) closeSettings();
   else if (!$("findSheet").hidden) closeFind();
   else if (!$("sheet").hidden) $("sheet").hidden = true;
+  else if (!$("infoSheet").hidden) $("infoSheet").hidden = true;
   else if (!$("emojiPanel").hidden) $("emojiPanel").hidden = true;
   else if (active) closeChat();
 });
@@ -2261,6 +2541,7 @@ const handleBack = () => {
   if (!$("reportBox").hidden) { closeReport(); return true; }
   if (!$("confirm").hidden) { closeConfirm(false); return true; }
   if (!$("choice").hidden) { closeChoice(null); return true; }
+  if (!$("editBox").hidden) { closeEdit(null); return true; }
   if (!chatMenu.hidden) { closeChatMenu(); return true; }
   if (!$("settingsSheet").hidden) { closeSettings(); return true; }
   if (!$("msgMenu").hidden) { closeMenu(); return true; }
@@ -2268,6 +2549,7 @@ const handleBack = () => {
   if (!$("lightbox").hidden) { $("lightbox").hidden = true; return true; }
   if (!$("findSheet").hidden) { closeFind(); return true; }
   if (!$("sheet").hidden) { $("sheet").hidden = true; return true; }
+  if (!$("infoSheet").hidden) { $("infoSheet").hidden = true; return true; }
   if (!$("emojiPanel").hidden) { $("emojiPanel").hidden = true; return true; }
   const callState = calls.busy();
   if (callState) {
