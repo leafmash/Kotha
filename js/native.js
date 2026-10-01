@@ -52,9 +52,21 @@ export function setActiveChat(chatId) {
   }
 }
 
+let lastBadge = -1;
+
+export function setBadgeCount(count) {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  if (!KothaDeepLink || n === lastBadge) return;
+  lastBadge = n;
+  KothaDeepLink.setBadge({ count: n }).catch(() => {
+    lastBadge = -1;
+  });
+}
+
 export function syncNativeSession(user, config) {
   if (!KothaSession) return;
   if (!user) {
+    lastBadge = -1;
     KothaSession.clearSession().catch(() => {});
     return;
   }

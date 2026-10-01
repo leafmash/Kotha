@@ -109,15 +109,15 @@ export function createCalls({ auth, db, fs, push, $, toast, pic, getActive, getU
     }
     const play = () => {
       try {
-        const t = audioCtx.currentTime + 0.05;
+        const at = audioCtx.currentTime + 0.05;
         if (kind === "in") {
-          beep(880, t, 0.35, 0.2);
-          beep(660, t + 0.4, 0.35, 0.2);
-          beep(880, t + 1.0, 0.35, 0.2);
-          beep(660, t + 1.4, 0.35, 0.2);
+          beep(880, at, 0.35, 0.2);
+          beep(660, at + 0.4, 0.35, 0.2);
+          beep(880, at + 1.0, 0.35, 0.2);
+          beep(660, at + 1.4, 0.35, 0.2);
           if (navigator.vibrate) navigator.vibrate([400, 200, 400]);
         } else {
-          beep(440, t, 1.0, 0.12);
+          beep(440, at, 1.0, 0.12);
         }
       } catch {
         return;
@@ -290,7 +290,7 @@ export function createCalls({ auth, db, fs, push, $, toast, pic, getActive, getU
     c.pc = pc;
     c.local = stream;
     c.remote = null;
-    stream.getTracks().forEach(t => pc.addTrack(t, stream));
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
     $("localVideo").srcObject = c.video ? stream : null;
     pc.ontrack = e => {
       c.remote = e.streams[0] || c.remote || new MediaStream([e.track]);
@@ -396,11 +396,15 @@ export function createCalls({ auth, db, fs, push, $, toast, pic, getActive, getU
       c.pc.ontrack = null;
       c.pc.close();
     }
-    if (c.local) c.local.getTracks().forEach(t => t.stop());
+    if (c.local) c.local.getTracks().forEach(track => track.stop());
     stopNativeAudio();
     if (c.created && !remote) {
       const status = reason === "declined" || reason === "missed" ? reason : "ended";
       updateDoc(c.ref, { status, endedAt: serverTimestamp(), endReason: reason }).catch(() => {});
+    }
+    if (c.connected && c.created && c.ref) {
+      const talked = Math.floor((Date.now() - c.startedAt) / 1000);
+      updateDoc(c.ref, { secs: talked }).catch(() => {});
     }
     if (c.dir === "out" && c.created) logCall(c, reason);
     hideCall();
@@ -412,8 +416,8 @@ export function createCalls({ auth, db, fs, push, $, toast, pic, getActive, getU
     if (call) finish(call, reason, "");
   };
 
-  async function startCall(video) {
-    const active = getActive();
+  async function startCall(video, target) {
+    const active = target || getActive();
     const me = auth.currentUser;
     if (call || !me || !active || active.group || !active.peer) return;
     if (!window.RTCPeerConnection || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -434,7 +438,7 @@ export function createCalls({ auth, db, fs, push, $, toast, pic, getActive, getU
       return;
     }
     if (c.ended) {
-      stream.getTracks().forEach(t => t.stop());
+      stream.getTracks().forEach(track => track.stop());
       return;
     }
     try {
@@ -522,7 +526,7 @@ export function createCalls({ auth, db, fs, push, $, toast, pic, getActive, getU
       return;
     }
     if (c.ended) {
-      stream.getTracks().forEach(t => t.stop());
+      stream.getTracks().forEach(track => track.stop());
       return;
     }
     try {
@@ -552,7 +556,7 @@ export function createCalls({ auth, db, fs, push, $, toast, pic, getActive, getU
     const tracks = c.local.getAudioTracks();
     if (!tracks.length) return;
     const on = !tracks[0].enabled;
-    tracks.forEach(t => { t.enabled = on; });
+    tracks.forEach(track => { track.enabled = on; });
     $("callMute").classList.toggle("off", !on);
   }
 
@@ -562,7 +566,7 @@ export function createCalls({ auth, db, fs, push, $, toast, pic, getActive, getU
     const tracks = c.local.getVideoTracks();
     if (!tracks.length) return;
     const on = !tracks[0].enabled;
-    tracks.forEach(t => { t.enabled = on; });
+    tracks.forEach(track => { track.enabled = on; });
     $("callCam").classList.toggle("off", !on);
     $("localVideo").classList.toggle("off", !on);
     if (c.created && c.ref) updateDoc(c.ref, { ["cam." + myUid()]: on }).catch(() => {});
@@ -707,7 +711,7 @@ export function createCalls({ auth, db, fs, push, $, toast, pic, getActive, getU
       }
     }
     if (c.ended) {
-      s.getTracks().forEach(t => t.stop());
+      s.getTracks().forEach(track => track.stop());
       return;
     }
     const track = s.getVideoTracks()[0];
@@ -784,5 +788,5 @@ export function createCalls({ auth, db, fs, push, $, toast, pic, getActive, getU
     return call.dir === "in" && !call.accepted ? "in" : "on";
   };
 
-  return { start, stop, busy };
+  return { start, stop, busy, startCall };
 }

@@ -1,12 +1,12 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserPopupRedirectResolver, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserPopupRedirectResolver, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithCredential, GoogleAuthProvider, EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getMessaging, getToken, isSupported } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
 import { createCalls } from "./call.js";
 import { createPushTrigger } from "./push-trigger.js";
 import { t, getLang, locale, fmtNumber, stored, displayStored, applyStatic, onLangChange, toggleLang } from "./i18n.js";
-import { isNative } from "./config.js";
-import { setupNative, hideNativeSplash, applyStatusBar, setActiveChat, syncNativeSession, nativeGoogleIdToken, registerNativePush, initBatteryPrompt, consumePendingChat } from "./native.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, query, orderBy, where, limit, serverTimestamp, arrayUnion, arrayRemove, increment, writeBatch, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { isNative, API_BASE, TERMS_VERSION } from "./config.js";
+import { setupNative, hideNativeSplash, applyStatusBar, setActiveChat, syncNativeSession, nativeGoogleIdToken, registerNativePush, initBatteryPrompt, consumePendingChat, setBadgeCount } from "./native.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, query, orderBy, where, limit, serverTimestamp, arrayUnion, arrayRemove, increment, writeBatch, deleteField, deleteDoc, terminate, clearIndexedDbPersistence, waitForPendingWrites } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAFMdkcndeYSl2A4MckeEBRG0YlAFlorzA",
@@ -43,18 +43,18 @@ const initialAvatar = (name = "?") => {
   return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 };
 const pic = u => u?.photo || initialAvatar(u?.name || "?");
-const clock = ts => ts?.toDate ? ts.toDate().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+const clock = ts => ts?.toDate ? ts.toDate().toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" }) : "";
 const dayLabel = d => {
-  const t = new Date();
-  if (d.toDateString() === t.toDateString()) return t("common.today");
-  t.setDate(t.getDate() - 1);
-  if (d.toDateString() === t.toDateString()) return t("common.yesterday");
+  const ref = new Date();
+  if (d.toDateString() === ref.toDateString()) return t("common.today");
+  ref.setDate(ref.getDate() - 1);
+  if (d.toDateString() === ref.toDateString()) return t("common.yesterday");
   return d.toLocaleDateString(locale(), { day: "numeric", month: "long" });
 };
 const listTime = ts => {
   if (!ts?.toDate) return "";
   const d = ts.toDate();
-  return d.toDateString() === new Date().toDateString() ? clock(ts) : d.toLocaleDateString([], { day: "numeric", month: "short" });
+  return d.toDateString() === new Date().toDateString() ? clock(ts) : d.toLocaleDateString(locale(), { day: "numeric", month: "short" });
 };
 const preview = m => {
   if (m.deleted) return t("chat.deleted");
@@ -92,7 +92,17 @@ const icons = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6 6 0 0 1 3.5 6"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
-  camera: '<path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>'
+  camera: '<path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>',
+  flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+  sliders: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
+  shield: '<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  bell: '<path d="M6 17v-6a6 6 0 0 1 12 0v6l1.5 2h-15L6 17zM10 21.5h4"/>',
+  bellOff: '<path d="M6 17v-6a6 6 0 0 1 1.5-4M10.5 5.3A6 6 0 0 1 18 11v4l1.5 2H9M10 21h4M4 4l16 16"/>',
+  arrowIn: '<path d="M17 7L7 17M7 9v8h8"/>',
+  arrowOut: '<path d="M7 17L17 7M9 7h8v8"/>',
+  phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+  video: '<rect x="3" y="6" width="12" height="12" rx="2.5"/><path d="M15 10.5l6-3.5v10l-6-3.5"/>'
 };
 const icon = (name, cls) => {
   const s = el("span", "ico" + (cls ? " " + cls : ""));
@@ -158,6 +168,7 @@ addEventListener("keydown", e => {
   closeChoice(null);
   closeMenu();
   closeMore();
+  closeChatMenu();
 });
 
 let toastTimer;
@@ -175,6 +186,17 @@ let unsubs = [];
 let chatUnsubs = [];
 let pendingName = "";
 let signup = false;
+let blocked = new Set();
+let deleting = false;
+let muted = {};
+let callDocs = new Map();
+let callHistoryOn = false;
+const deliverKeys = new Map();
+const inflight = new Set();
+const OUTBOX = "kotha-outbox";
+let flushing = false;
+const FOREVER = 4102444800000;
+const isMuted = id => (Number(muted[id]) || 0) > Date.now();
 const renderAuthTexts = () => {
   $("authBtn").textContent = t(signup ? "auth.signUp" : "auth.signIn");
   $("switchText").textContent = t(signup ? "auth.haveAccount" : "auth.newHere");
@@ -239,6 +261,7 @@ function openMore() {
     { icon: "camera", label: t("menu.changeProfilePhoto"), fn: () => $("avatarInput").click() },
     { icon: dark ? "sun" : "moon", label: dark ? t("menu.lightMode") : t("menu.darkMode"), fn: toggleTheme },
     { icon: "globe", label: getLang() === "en" ? "বাংলা" : "English", fn: toggleLang },
+    { icon: "sliders", label: t("menu.settings"), fn: () => openSettings() },
     { icon: "logout", label: t("menu.signOut"), fn: () => logout(), danger: true }
   ];
   moreMenu.replaceChildren(...items.map(it => {
@@ -276,7 +299,11 @@ onLangChange(() => {
     if (!$("sheet").hidden) syncGroupUi();
     if (!$("findSheet").hidden) renderFind();
     if (!moreMenu.hidden) openMore();
+    if (!chatMenu.hidden) openChatMenu();
+    if (!$("settingsSheet").hidden) renderBlockedList();
+    if (!$("reportBox").hidden) renderReasons();
   }
+  setLegalLinks();
 });
 
 renderAuthTexts();
@@ -334,7 +361,7 @@ async function logout() {
   await signOut(auth);
 }
 
-const setPresence = on => auth.currentUser
+const setPresence = on => auth.currentUser && !deleting
   ? updateDoc(doc(db, "users", auth.currentUser.uid), { online: on, lastSeen: serverTimestamp() }).catch(() => {})
   : Promise.resolve();
 
@@ -344,10 +371,12 @@ document.addEventListener("visibilitychange", () => {
   renderList();
 });
 
-function markRead() {
-  if (!active || document.hidden || !auth.currentUser) return;
+function markRead(force = false) {
+  if (!active || document.hidden || !auth.currentUser || deleting) return;
   const uid = auth.currentUser.uid;
-  if (!active.data?.unread?.[uid]) return;
+  const listed = chats.find(c => c.id === active.id);
+  const pending = (active.data?.unread?.[uid] || 0) + (listed?.unread?.[uid] || 0);
+  if (!force && !pending) return;
   setDoc(doc(db, "chats", active.id), { unread: { [uid]: 0 } }, { merge: true }).catch(() => {});
 }
 addEventListener("beforeunload", () => setPresence(false));
@@ -363,6 +392,13 @@ onAuthStateChanged(auth, async user => {
     chatsReady = false;
     lastAtSeen.clear();
     goneCache.clear();
+    blocked = new Set();
+    muted = {};
+    callDocs = new Map();
+    callHistoryOn = false;
+    deliverKeys.clear();
+    $("termsGate").hidden = true;
+    $("settingsSheet").hidden = true;
     closeMore();
     closeChat();
     $("app").hidden = true;
@@ -383,8 +419,10 @@ onAuthStateChanged(auth, async user => {
   users = new Map();
   searchState = { term: "", status: "idle", user: null };
   const ref = doc(db, "users", user.uid);
+  let needTerms = false;
   try {
     const snap = await getDoc(ref);
+    needTerms = !snap.exists() || snap.data().termsVersion !== TERMS_VERSION;
     if (!snap.exists()) {
       await setDoc(ref, { uid: user.uid, name: pendingName || user.displayName || (user.email || "").split("@")[0] || t("common.user"), photo: user.photoURL || "" }, { merge: true });
     } else if ("email" in snap.data()) {
@@ -402,32 +440,66 @@ onAuthStateChanged(auth, async user => {
     toast(t("list.loadFail"));
   }
   $("app").hidden = false;
+  if (needTerms) showTermsGate();
   registerPush(true);
   initBatteryPrompt();
   calls.start(user.uid);
   setPresence(true);
+  flushOutbox();
   unsubs.push(() => {
     userWatch.forEach(u => u());
     userWatch.clear();
   });
   watchUser(user.uid);
+  unsubs.push(onSnapshot(collection(db, "users", user.uid, "blocked"), s => {
+    blocked = new Set(s.docs.map(d => d.id));
+    blocked.forEach(watchUser);
+    refreshBlockedUi();
+  }, () => {}));
+  unsubs.push(onSnapshot(doc(db, "pushTokens", user.uid), s => {
+    muted = s.exists() ? s.data().muted || {} : {};
+    renderList();
+    if (!chatMenu.hidden) openChatMenu();
+  }, () => {}));
   unsubs.push(onSnapshot(query(collection(db, "chats"), where("members", "array-contains", user.uid)), s => {
     const initial = !chatsReady;
     chatsReady = true;
     s.docChanges().forEach(ch => {
       const c = ch.doc.data();
-      const t = c.lastAt?.seconds || 0;
+      const stamp = c.lastAt?.seconds || 0;
       const prev = lastAtSeen.get(ch.doc.id) || 0;
-      lastAtSeen.set(ch.doc.id, t);
-      if (initial || !t || t <= prev || c.lastFrom === user.uid) return;
-      if (document.hidden || active?.id !== ch.doc.id) notify(c, ch.doc.id);
+      lastAtSeen.set(ch.doc.id, stamp);
+      if (initial || !stamp || stamp <= prev || c.lastFrom === user.uid || blocked.has(c.lastFrom)) return;
+      if ((document.hidden || active?.id !== ch.doc.id) && !isMuted(ch.doc.id)) notify(c, ch.doc.id);
     });
     chats = s.docs.map(d => ({ id: d.id, ...d.data() }));
     chats.flatMap(c => c.members || []).forEach(watchUser);
+    markDelivered(chats);
     renderList();
     checkReady();
   }, hideSplash));
 });
+
+function markDelivered(list) {
+  const uid = auth.currentUser?.uid;
+  if (!uid || deleting) return;
+  list.forEach(c => {
+    const n = Number(c.unread?.[uid]) || 0;
+    if (!n || c.lastFrom === uid) return;
+    if (active?.id === c.id && !document.hidden) return;
+    const key = (c.lastAt?.seconds || 0) + ":" + n;
+    if (deliverKeys.get(c.id) === key) return;
+    deliverKeys.set(c.id, key);
+    getDocs(query(collection(db, "chats", c.id, "messages"), orderBy("at", "desc"), limit(Math.min(n, PAGE)))).then(s => {
+      const pending = s.docs.filter(d => d.data().from !== uid && d.data().status === "sent");
+      if (!pending.length) return null;
+      if (active?.id === c.id && !document.hidden) return null;
+      const batch = writeBatch(db);
+      pending.forEach(d => batch.update(d.ref, { status: "delivered" }));
+      return batch.commit();
+    }).catch(() => deliverKeys.delete(c.id));
+  });
+}
 
 function watchUser(id) {
   if (!id || userWatch.has(id)) return;
@@ -536,9 +608,13 @@ $("avatarInput").onchange = async e => {
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
+  if (!navigator.onLine) {
+    toast(t("chat.offlineMedia"));
+    return;
+  }
   toast(t("photo.uploading"), true);
   try {
-    const res = await upload(file);
+    const res = await upload(await compressImage(file, 640, 0.85));
     await updateDoc(doc(db, "users", auth.currentUser.uid), { photo: res.secure_url });
     toast(t("photo.changed"));
   } catch (err) {
@@ -546,7 +622,7 @@ $("avatarInput").onchange = async e => {
   }
 };
 
-function row(u, sub, time, unread, fn, isActive) {
+function row(u, sub, time, unread, fn, isActive, silent) {
   const r = el("div", "row" + (isActive ? " active" : "") + (unread > 0 ? " unread" : ""));
   const av = el("div", "av" + (u.online ? " online" : ""));
   const img = el("img");
@@ -558,7 +634,8 @@ function row(u, sub, time, unread, fn, isActive) {
   top.append(el("b", "", u.name || t("common.user")), el("time", "", time));
   const bot = el("div", "bot");
   bot.append(el("span", "sub", sub));
-  if (unread > 0) bot.append(el("span", "badge", unread > 99 ? "99+" : String(unread)));
+  if (silent) bot.append(icon("bellOff", "muteic"));
+  if (unread > 0) bot.append(el("span", "badge" + (silent ? " quiet" : ""), unread > 99 ? "99+" : String(unread)));
   body.append(top, bot);
   r.append(av, body);
   r.onclick = fn;
@@ -572,12 +649,18 @@ function renderList() {
   const uid = auth.currentUser.uid;
   const term = $("search").value.trim().toLowerCase();
   const hit = name => !term || (name || "").toLowerCase().includes(term);
-  const totalUnread = chats.reduce((n, c) => n + unreadOf(c, uid), 0);
+  const totalUnread = chats.reduce((n, c) => n + (isMuted(c.id) || (!c.group && blocked.has(peerIdOf(c, uid))) ? 0 : unreadOf(c, uid)), 0);
+  setBadgeCount(totalUnread);
   document.title = (totalUnread ? `(${totalUnread}) ` : "") + "কথা";
   $("railBadge").hidden = !totalUnread;
   $("railBadge").textContent = totalUnread > 99 ? "99+" : totalUnread;
   $("tabBadge").hidden = !totalUnread;
   $("tabBadge").textContent = totalUnread > 99 ? "99+" : totalUnread;
+
+  if (filter === "calls") {
+    renderCalls(list, uid, hit);
+    return;
+  }
 
   if (filter === "group" && !term) {
     const r = el("div", "row newgroup");
@@ -601,15 +684,20 @@ function renderList() {
       if (c.group) {
         if (!hit(c.name)) return;
         const g = { uid: c.id, name: c.name, photo: c.photo || "" };
-        const who = c.lastFrom === uid ? t("list.youPrefix") : (users.get(c.lastFrom)?.name || "") + ": ";
-        list.append(row(g, who + lastText(c.lastMessage), listTime(c.lastAt), unreadOf(c, uid), () => openChat(null, c), active?.id === c.id));
+        const hiddenLast = blocked.has(c.lastFrom);
+        let who = "";
+        if (c.lastFrom === uid) who = t("list.youPrefix");
+        else if (c.lastFrom && !hiddenLast) who = (users.get(c.lastFrom)?.name || "") + ": ";
+        const last = hiddenLast ? t("block.hiddenMessage") : lastText(c.lastMessage);
+        list.append(row(g, who + last, listTime(c.lastAt), unreadOf(c, uid), () => openChat(null, c), active?.id === c.id, isMuted(c.id)));
         count++;
         return;
       }
-      const peer = users.get(c.members.find(m => m !== uid));
-      if (!peer || !hit(peer.name)) return;
+      const peerId = peerIdOf(c, uid);
+      const peer = users.get(peerId);
+      if (!peer || blocked.has(peerId) || !hit(peer.name)) return;
       const sub = (c.lastFrom === uid ? t("list.youPrefix") : "") + lastText(c.lastMessage);
-      list.append(row(peer, sub, listTime(c.lastAt), unreadOf(c, uid), () => openChat(peer), active?.peer === peer.uid));
+      list.append(row(peer, sub, listTime(c.lastAt), unreadOf(c, uid), () => openChat(peer), active?.peer === peer.uid, isMuted(c.id)));
       count++;
     });
 
@@ -633,9 +721,94 @@ $("chips").onclick = e => {
 function syncFilterUi() {
   $("chips").querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.f === filter));
   document.querySelectorAll("#rail [data-f]").forEach(x => x.classList.toggle("on", x.dataset.f === filter));
-  document.querySelectorAll("#tabs [data-f]").forEach(x => x.classList.toggle("on", x.dataset.f === (filter === "group" ? "group" : "all")));
-  $("chips").hidden = filter === "group";
-  document.querySelector(".dtitle").textContent = filter === "group" ? t("common.groups") : t("common.chats");
+  document.querySelectorAll("#tabs [data-f]").forEach(x => x.classList.toggle("on", x.dataset.f === (filter === "group" || filter === "calls" ? filter : "all")));
+  $("chips").hidden = filter === "group" || filter === "calls";
+  document.querySelector(".dtitle").textContent = filter === "group" ? t("common.groups") : filter === "calls" ? t("common.calls") : t("common.chats");
+  if (filter === "calls") watchCallHistory();
+}
+
+function watchCallHistory() {
+  if (callHistoryOn || !auth.currentUser) return;
+  callHistoryOn = true;
+  const uid = auth.currentUser.uid;
+  const take = s => {
+    s.docChanges().forEach(ch => {
+      if (ch.type === "removed") callDocs.delete(ch.doc.id);
+      else callDocs.set(ch.doc.id, { id: ch.doc.id, ...ch.doc.data() });
+    });
+    if (filter === "calls") renderList();
+  };
+  const fail = () => { callHistoryOn = false; };
+  unsubs.push(onSnapshot(query(collection(db, "calls"), where("caller", "==", uid)), take, fail));
+  unsubs.push(onSnapshot(query(collection(db, "calls"), where("callee", "==", uid)), take, fail));
+}
+
+const stamp = ms => ({ toDate: () => new Date(ms) });
+
+function callEntry(c, uid) {
+  const out = c.caller === uid;
+  const peer = out ? c.callee : c.caller;
+  const at = c.createdAt?.toMillis?.() || Date.now();
+  const label = t(c.video ? "call.video" : "call.voice");
+  let kind;
+  if (c.answer) kind = "done";
+  else if (c.status === "ringing") kind = Date.now() - at < 90000 ? "ringing" : "missed";
+  else if (c.status === "declined") kind = out ? "declined" : (c.endReason === "busy" ? "missed" : "declined");
+  else if (c.status === "missed") kind = "missed";
+  else kind = out ? "cancelled" : "missed";
+  const secs = Number(c.secs) || 0;
+  let text;
+  if (kind === "done") text = secs ? label + " · " + Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0") : label;
+  else if (kind === "declined") text = t("call.logDeclined", { label });
+  else if (kind === "cancelled") text = t("call.logCancelled", { label });
+  else if (out) text = label + " · " + t("call.noAnswer");
+  else text = t("call.logMissed", { label });
+  return { id: c.id, out, peer, at, video: !!c.video, kind, text, chatId: c.chatId, bad: kind === "missed" && !out };
+}
+
+function callRow(e) {
+  const u = users.get(e.peer) || { name: "" };
+  const r = el("div", "row callrow" + (e.bad ? " missed" : ""));
+  const av = el("div", "av");
+  const img = el("img");
+  img.src = pic(u);
+  img.alt = "";
+  av.append(img);
+  const body = el("div", "body");
+  const top = el("div", "top");
+  top.append(el("b", "", u.name || t("common.user")), el("time", "", listTime(stamp(e.at))));
+  const bot = el("div", "bot");
+  const sub = el("span", "sub csub");
+  sub.append(icon(e.out ? "arrowOut" : "arrowIn", "dir"), el("span", "", e.text));
+  const again = el("button", "callagain");
+  again.title = t("calls.callBack");
+  again.setAttribute("aria-label", t("calls.callBack"));
+  again.append(icon(e.video ? "video" : "phone"));
+  again.onclick = ev => {
+    ev.stopPropagation();
+    calls.startCall(e.video, { id: e.chatId, peer: e.peer, group: false });
+  };
+  bot.append(sub, again);
+  body.append(top, bot);
+  r.append(av, body);
+  r.onclick = () => {
+    const peer = users.get(e.peer);
+    if (peer) openChat(peer);
+  };
+  return r;
+}
+
+function renderCalls(list, uid, hit) {
+  const entries = [...callDocs.values()]
+    .map(c => callEntry(c, uid))
+    .filter(e => e.kind !== "ringing" && e.peer && !blocked.has(e.peer))
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 100);
+  entries.forEach(e => { if (!users.has(e.peer)) watchUser(e.peer); });
+  const shown = entries.filter(e => users.has(e.peer) && hit(users.get(e.peer).name));
+  shown.forEach(e => list.append(callRow(e)));
+  if (shown.length) return;
+  list.append(el("p", "hint", t($("search").value.trim() ? "list.noMatch" : "calls.noCalls")));
 }
 
 document.querySelectorAll("#tabs [data-f]").forEach(b => {
@@ -685,6 +858,7 @@ async function openChat(peer, group) {
   goneCache.clear();
   active = { id, peer: group ? null : peer.uid, group: !!group, members: group ? group.members : [uid, peer.uid], reply: null, data: group || null, first: true, lastId: null, limit: PAGE, hasMore: false, olderLoad: false };
   setActiveChat(id);
+  if (!group) watchUser(peer.uid);
   $("empty").hidden = true;
   $("pane").hidden = false;
   $("app").classList.add("in-chat");
@@ -711,7 +885,7 @@ function listenMessages() {
   const target = active;
   const uid = auth.currentUser.uid;
   msgUnsub?.();
-  msgUnsub = onSnapshot(query(collection(db, "chats", target.id, "messages"), orderBy("at", "desc"), limit(target.limit)), s => {
+  msgUnsub = onSnapshot(query(collection(db, "chats", target.id, "messages"), orderBy("at", "desc"), limit(target.limit)), { includeMetadataChanges: true }, s => {
     if (active !== target) return;
     target.hasMore = s.docs.length >= target.limit;
     lastMessageDocs = s.docs.slice().reverse();
@@ -722,7 +896,7 @@ function listenMessages() {
       unseen.forEach(d => batch.update(d.ref, { status: "seen" }));
       batch.commit().catch(() => {});
     }
-    markRead();
+    markRead(unseen.length > 0);
   });
 }
 
@@ -741,6 +915,14 @@ function openChatById(id) {
 
 function renderPeer() {
   if (!active) return;
+  const locked = !active.group && blocked.has(active.peer);
+  $("composer").hidden = locked;
+  $("blockBar").hidden = !locked;
+  if (locked) {
+    $("emojiPanel").hidden = true;
+    clearReply();
+    $("blockText").textContent = t("block.bar", { name: nameOf(active.peer) });
+  }
   if (active.group) {
     $("hcalls").hidden = true;
     const g = active.data || {};
@@ -753,8 +935,16 @@ function renderPeer() {
     return;
   }
   const peer = users.get(active.peer);
-  if (!peer) return;
-  $("hcalls").hidden = false;
+  if (!peer) {
+    $("hcalls").hidden = locked;
+    $("peerAv").className = "av";
+    $("peerName").textContent = "";
+    $("peerStatus").classList.remove("live");
+    $("peerStatus").textContent = "";
+    watchUser(active.peer);
+    return;
+  }
+  $("hcalls").hidden = locked;
   $("peerImg").src = pic(peer);
   $("peerAv").className = "av" + (peer.online ? " online" : "");
   $("peerName").textContent = peer.name || "";
@@ -778,17 +968,26 @@ function renderMessages(all) {
   box.replaceChildren();
   let lastDay = "";
   let prevFrom = null;
+  let hiddenRun = false;
   active.lastId = docs.length ? docs[docs.length - 1].id : null;
 
   docs.forEach(d => {
-    const m = d.data();
+    const m = d.data({ serverTimestamps: "estimate" });
     const mine = m.from === uid;
+    const queued = mine && d.metadata.hasPendingWrites && !d.data().at;
     const date = m.at?.toDate?.();
     if (date && date.toDateString() !== lastDay) {
       lastDay = date.toDateString();
       box.append(el("div", "day", dayLabel(date)));
       prevFrom = null;
     }
+    if (active.group && !mine && blocked.has(m.from)) {
+      if (!hiddenRun) box.append(el("div", "day hidden-note", t("block.hiddenMessage")));
+      hiddenRun = true;
+      prevFrom = null;
+      return;
+    }
+    hiddenRun = false;
     const b = el("div", "msg " + (mine ? "mine" : "theirs") + (prevFrom !== m.from ? " first" : ""));
     b.id = "m-" + d.id;
     prevFrom = m.from;
@@ -805,11 +1004,11 @@ function renderMessages(all) {
       if (rid) {
         q.dataset.reply = rid;
         q.onclick = () => {
-          const t = $("m-" + rid);
-          if (!t) return;
-          t.scrollIntoView({ behavior: "smooth", block: "center" });
-          t.classList.add("flash");
-          setTimeout(() => t.classList.remove("flash"), 1300);
+          const target = $("m-" + rid);
+          if (!target) return;
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          target.classList.add("flash");
+          setTimeout(() => target.classList.remove("flash"), 1300);
         };
         if (!inWindow && !goneCache.has(active.id + "/" + rid)) checkGone(active.id, rid);
       }
@@ -864,8 +1063,9 @@ function renderMessages(all) {
     meta.append(el("span", "", clock(m.at)));
     if (mine && !m.deleted) {
       const seen = m.status === "seen";
+      const reached = seen || m.status === "delivered";
       const tick = el("span", seen ? "seen" : "");
-      tick.append(icon(seen ? "checks" : "check", "tick"));
+      tick.append(icon(queued ? "clock" : reached ? "checks" : "check", "tick"));
       meta.append(tick);
     }
     b.append(meta);
@@ -932,14 +1132,14 @@ async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
-    const t = document.createElement("textarea");
-    t.value = text;
-    t.style.position = "fixed";
-    t.style.opacity = "0";
-    document.body.append(t);
-    t.select();
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.append(area);
+    area.select();
     document.execCommand("copy");
-    t.remove();
+    area.remove();
   }
   toast(t("chat.copied"));
 }
@@ -979,6 +1179,10 @@ function openMenu(d, m, mine) {
     const copyable = m.type === "text" || !m.type ? m.text : m.url;
     if (copyable) tile("copy", t("msg.copy"), () => copyText(copyable));
     tile("trash", t("msg.delete"), () => removeMessage(d), true);
+    if (!mine) {
+      tile("flag", t("report.message"), () => reportMessage(d, m), true);
+      if (active?.group) tile("ban", t("block.action"), () => blockFlow(m.from), true);
+    }
   }
   const grid = $("menuItems");
   grid.style.setProperty("--n", items.length);
@@ -1076,15 +1280,123 @@ async function send(payload, target = active) {
   const msg = { from: uid, type: "text", text: "", at: serverTimestamp(), status: "sent", ...payload };
   if (target.reply) msg.replyTo = { text: target.reply.text, id: target.reply.id };
   if (target === active) clearReply();
-  const sent = await addDoc(collection(db, "chats", target.id, "messages"), msg);
-  triggerPush({ type: "message", chatId: target.id, messageId: sent.id });
-  await setDoc(doc(db, "chats", target.id), {
+  const msgRef = doc(collection(db, "chats", target.id, "messages"));
+  const batch = writeBatch(db);
+  batch.set(msgRef, msg);
+  batch.set(doc(db, "chats", target.id), {
     lastMessage: previewStored(msg),
     lastFrom: uid,
     lastAt: serverTimestamp(),
     typing: { [uid]: false },
     unread: Object.fromEntries(target.members.filter(m => m !== uid).map(m => [m, increment(1)]))
   }, { merge: true });
+  inflight.add(msgRef.id);
+  outboxAdd({ uid, chatId: target.id, messageId: msgRef.id });
+  try {
+    await batch.commit();
+  } catch (err) {
+    inflight.delete(msgRef.id);
+    outboxDrop(msgRef.id);
+    throw err;
+  }
+  triggerPush({ type: "message", chatId: target.id, messageId: msgRef.id });
+  inflight.delete(msgRef.id);
+  outboxDrop(msgRef.id);
+}
+
+const readOutbox = () => {
+  try {
+    const list = JSON.parse(localStorage.getItem(OUTBOX) || "[]");
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+};
+const writeOutbox = list => {
+  try {
+    localStorage.setItem(OUTBOX, JSON.stringify(list.slice(-200)));
+  } catch {
+    return;
+  }
+};
+const outboxAdd = entry => writeOutbox([...readOutbox(), entry]);
+const outboxDrop = id => writeOutbox(readOutbox().filter(x => x.messageId !== id));
+
+async function flushOutbox() {
+  const user = auth.currentUser;
+  if (!user || deleting || flushing) return;
+  flushing = true;
+  try {
+    await waitForPendingWrites(db);
+    const all = readOutbox();
+    const mine = all.filter(x => x.uid === user.uid && !inflight.has(x.messageId));
+    writeOutbox(all.filter(x => x.uid === user.uid && inflight.has(x.messageId)));
+    mine.forEach(x => triggerPush({ type: "message", chatId: x.chatId, messageId: x.messageId }));
+  } catch {
+    return;
+  } finally {
+    flushing = false;
+  }
+}
+
+const syncNet = () => { $("offlineBar").hidden = navigator.onLine; };
+addEventListener("online", () => {
+  syncNet();
+  flushOutbox();
+});
+addEventListener("offline", syncNet);
+syncNet();
+
+const imageSize = img => ({ w: img.naturalWidth || img.width, h: img.naturalHeight || img.height });
+
+async function loadImage(file) {
+  if (window.createImageBitmap) {
+    try {
+      return await createImageBitmap(file, { imageOrientation: "from-image" });
+    } catch {
+      return loadImageTag(file);
+    }
+  }
+  return loadImageTag(file);
+}
+
+const loadImageTag = file => new Promise((resolve, reject) => {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    resolve(img);
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    reject(new Error("image"));
+  };
+  img.src = url;
+});
+
+async function compressImage(file, maxSide = 1600, quality = 0.8) {
+  if (!file.type.startsWith("image/") || /gif|svg/.test(file.type) || file.size < 150 * 1024) return file;
+  try {
+    const img = await loadImage(file);
+    const { w: iw, h: ih } = imageSize(img);
+    const scale = Math.min(1, maxSide / Math.max(iw, ih));
+    const w = Math.max(1, Math.round(iw * scale));
+    const h = Math.max(1, Math.round(ih * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    if (img.close) img.close();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (!blob || blob.size >= file.size) return file;
+    const base = (file.name || "photo").replace(/\.[^.]+$/, "");
+    return new File([blob], base + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
 }
 
 const syncComposer = () => {
@@ -1118,7 +1430,7 @@ async function submitText() {
   try {
     await send({ text });
   } catch (err) {
-    toast(t("chat.sendFail"));
+    toast(t(err?.code === "permission-denied" ? "chat.cannotSend" : "chat.sendFail"));
   }
 }
 input.onkeydown = e => {
@@ -1156,11 +1468,16 @@ $("fileInput").onchange = async e => {
   e.target.value = "";
   if (!file || !active) return;
   const target = active;
+  if (!navigator.onLine) {
+    toast(t("chat.offlineMedia"));
+    return;
+  }
   toast(t("chat.uploading"), true);
   try {
-    const res = await upload(file);
-    const type = res.resource_type === "image" ? "image" : res.resource_type === "video" ? (file.type.startsWith("audio") ? "audio" : "video") : "file";
-    await send({ type, url: res.secure_url, name: file.name, size: file.size }, target);
+    const prepared = await compressImage(file);
+    const res = await upload(prepared);
+    const type = res.resource_type === "image" ? "image" : res.resource_type === "video" ? (prepared.type.startsWith("audio") ? "audio" : "video") : "file";
+    await send({ type, url: res.secure_url, name: prepared.name, size: prepared.size }, target);
     toast("");
   } catch (err) {
     toast(err.message);
@@ -1195,10 +1512,14 @@ $("micBtn").onclick = async () => {
     recorder = new MediaRecorder(stream);
     recorder.ondataavailable = e => chunks.push(e.data);
     recorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
+      stream.getTracks().forEach(track => track.stop());
       stopRecUi();
       if (recCancelled) return;
       const blob = new Blob(chunks, { type: recorder.mimeType });
+      if (!navigator.onLine) {
+        toast(t("chat.offlineMedia"));
+        return;
+      }
       toast(t("chat.sendingVoice"), true);
       try {
         const res = await upload(new File([blob], "voice", { type: blob.type }));
@@ -1326,6 +1647,7 @@ async function lookupEmail(term) {
     if (hit.data().uid === auth.currentUser.uid) return { status: "self" };
     const p = await getDoc(doc(db, "users", hit.data().uid));
     if (!p.exists()) return { status: "none" };
+    if (blocked.has(p.id)) return { status: "blocked" };
     users.set(p.id, p.data());
     watchUser(p.id);
     return { status: "found", user: p.data() };
@@ -1338,7 +1660,7 @@ function groupContacts() {
   const me = auth.currentUser.uid;
   const ids = new Set(chats.filter(c => !c.group).map(c => c.members.find(m => m !== me)));
   groupExtra.forEach((u, id) => ids.add(id));
-  return [...ids].map(id => users.get(id) || groupExtra.get(id)).filter(Boolean);
+  return [...ids].filter(id => !blocked.has(id)).map(id => users.get(id) || groupExtra.get(id)).filter(Boolean);
 }
 
 let lastPicked = 0;
@@ -1403,7 +1725,8 @@ function renderGroupFind(r) {
     loading: t("find.loading"),
     self: t("find.self"),
     error: t("find.error"),
-    none: t("find.none")
+    none: t("find.none"),
+    blocked: t("block.inGroup")
   };
   if (r.status !== "found") {
     box.append(el("p", "hint", notes[r.status]));
@@ -1474,6 +1797,400 @@ $("sheetDone").onclick = async () => {
   openChat(null, { id: ref.id, name, members });
 };
 
+const peerIdOf = (c, uid) => c.members.find(m => m !== uid);
+const nameOf = id => users.get(id)?.name || t("common.user");
+const blockedRef = id => doc(db, "users", auth.currentUser.uid, "blocked", id);
+
+function refreshBlockedUi() {
+  renderList();
+  if (active) {
+    renderPeer();
+    if (lastMessageDocs) renderMessages(lastMessageDocs);
+  }
+  if (!$("settingsSheet").hidden) renderBlockedList();
+}
+
+async function blockFlow(id) {
+  if (!id || id === auth.currentUser.uid || blocked.has(id)) return;
+  const name = nameOf(id);
+  const ok = await askConfirm({ title: t("block.confirmTitle", { name }), text: t("block.confirmText"), ok: t("block.action"), iconName: "ban" });
+  if (!ok) return;
+  setDoc(blockedRef(id), { at: serverTimestamp() }).catch(() => toast(t("block.fail")));
+  toast(t("block.done", { name }));
+}
+
+function unblockFlow(id) {
+  deleteDoc(blockedRef(id)).catch(() => toast(t("block.unblockFail")));
+  toast(t("block.unblocked", { name: nameOf(id) }));
+}
+
+$("unblockBtn").onclick = () => {
+  if (active && !active.group) unblockFlow(active.peer);
+};
+
+const REASONS = ["spam", "harassment", "hate", "sexual", "violence", "scam", "other"];
+let reportCtx = null;
+let reportReason = "";
+
+function renderReasons() {
+  $("reportReasons").replaceChildren(...REASONS.map(key => {
+    const b = el("button", "reason" + (reportReason === key ? " on" : ""));
+    b.type = "button";
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", String(reportReason === key));
+    b.append(el("span", "radio"), el("span", "", t("report.reason." + key)));
+    b.onclick = () => {
+      reportReason = key;
+      renderReasons();
+      $("reportSubmit").disabled = false;
+    };
+    return b;
+  }));
+}
+
+function openReport(ctx) {
+  reportCtx = ctx;
+  reportReason = "";
+  $("reportTitle").textContent = ctx.title;
+  $("reportNote").value = "";
+  $("reportBlock").checked = false;
+  $("reportBlockRow").hidden = !ctx.targetUid || blocked.has(ctx.targetUid);
+  $("reportSubmit").disabled = true;
+  renderReasons();
+  $("reportBox").hidden = false;
+  $("reportBox").querySelector(".dialog").scrollTop = 0;
+}
+
+function closeReport() {
+  $("reportBox").hidden = true;
+  reportCtx = null;
+}
+
+$("reportCancel").onclick = closeReport;
+$("reportBox").onclick = e => { if (e.target === $("reportBox")) closeReport(); };
+$("reportSubmit").onclick = () => {
+  const ctx = reportCtx;
+  if (!ctx || !reportReason || !auth.currentUser) return;
+  const data = { reporter: auth.currentUser.uid, type: ctx.type, reason: reportReason, chatId: ctx.chatId, createdAt: serverTimestamp() };
+  const note = $("reportNote").value.trim().slice(0, 500);
+  if (note) data.note = note;
+  if (ctx.targetUid) data.reportedUid = ctx.targetUid;
+  if (ctx.messageId) data.messageId = ctx.messageId;
+  if (ctx.content) data.content = String(ctx.content).slice(0, 1500);
+  if (ctx.contentType) data.contentType = ctx.contentType;
+  const alsoBlock = !$("reportBlockRow").hidden && $("reportBlock").checked && ctx.targetUid;
+  closeReport();
+  addDoc(collection(db, "reports"), data).catch(() => toast(t("report.fail")));
+  if (alsoBlock) setDoc(blockedRef(ctx.targetUid), { at: serverTimestamp() }).catch(() => {});
+  toast(t("report.sent"));
+};
+
+function reportUser(id) {
+  if (!active) return;
+  openReport({ type: "user", chatId: active.id, targetUid: id, title: t("report.titleUser", { name: nameOf(id) }) });
+}
+
+function reportGroup() {
+  if (!active) return;
+  openReport({ type: "group", chatId: active.id, title: t("report.titleGroup") });
+}
+
+function reportMessage(d, m) {
+  if (!active) return;
+  const media = m.type && m.type !== "text";
+  openReport({
+    type: "message",
+    chatId: active.id,
+    messageId: d.id,
+    targetUid: m.from,
+    content: media ? m.url || "" : m.text || "",
+    contentType: m.type || "text",
+    title: t("report.titleMessage")
+  });
+}
+
+async function leaveGroup() {
+  if (!active?.group) return;
+  const ok = await askConfirm({ title: t("group.leaveTitle"), text: t("group.leaveText"), ok: t("group.leave"), iconName: "logout" });
+  if (!ok || !active?.group) return;
+  const id = active.id;
+  closeChat();
+  renderList();
+  updateDoc(doc(db, "chats", id), { members: arrayRemove(auth.currentUser.uid) }).catch(() => toast(t("group.leaveFail")));
+  toast(t("group.left"));
+}
+
+const chatMenu = $("chatMenu");
+
+const pushRef = () => doc(db, "pushTokens", auth.currentUser.uid);
+
+async function setMute(id, until) {
+  const previous = muted;
+  muted = { ...muted };
+  if (until) muted[id] = until;
+  else delete muted[id];
+  renderList();
+  try {
+    await setDoc(pushRef(), { muted: { [id]: until || deleteField() } }, { merge: true });
+    toast(t(until ? "mute.done" : "mute.undone"));
+  } catch {
+    muted = previous;
+    renderList();
+    toast(t("mute.fail"));
+  }
+}
+
+async function muteFlow(id) {
+  if (!id || !auth.currentUser) return;
+  if (isMuted(id)) {
+    setMute(id, 0);
+    return;
+  }
+  const spans = [8 * 3600000, 7 * 24 * 3600000, 0];
+  const choice = await askChoice({
+    title: t("mute.title"),
+    text: t("mute.text"),
+    iconName: "bellOff",
+    options: [
+      { label: t("mute.8h"), value: 1, kind: "dsoft" },
+      { label: t("mute.1w"), value: 2, kind: "dsoft" },
+      { label: t("mute.always"), value: 3, kind: "dsoft" },
+      { label: t("common.cancel"), value: null, kind: "dcancel" }
+    ]
+  });
+  if (!choice) return;
+  const span = spans[choice - 1];
+  setMute(id, span ? Date.now() + span : FOREVER);
+}
+
+function closeChatMenu() {
+  chatMenu.hidden = true;
+  $("chatMenuBtn").setAttribute("aria-expanded", "false");
+}
+
+function openChatMenu() {
+  if (!active) return;
+  const items = [];
+  if (active.group) {
+    items.push({ icon: "flag", label: t("report.group"), fn: reportGroup });
+    items.push({ icon: "logout", label: t("group.leave"), fn: leaveGroup, danger: true });
+  } else {
+    const id = active.peer;
+    if (blocked.has(id)) items.push({ icon: "ban", label: t("block.unblockUser"), fn: () => unblockFlow(id) });
+    else items.push({ icon: "ban", label: t("block.user"), fn: () => blockFlow(id), danger: true });
+    items.push({ icon: "flag", label: t("report.user"), fn: () => reportUser(id) });
+  }
+  const silenced = isMuted(active.id);
+  items.unshift({ icon: silenced ? "bell" : "bellOff", label: t(silenced ? "mute.unmute" : "mute.action"), fn: () => muteFlow(active.id) });
+  chatMenu.replaceChildren(...items.map(it => {
+    const b = el("button", "mi" + (it.danger ? " danger" : ""));
+    b.setAttribute("role", "menuitem");
+    b.append(icon(it.icon), el("span", "", it.label));
+    b.onclick = () => {
+      closeChatMenu();
+      it.fn();
+    };
+    return b;
+  }));
+  chatMenu.hidden = false;
+  $("chatMenuBtn").setAttribute("aria-expanded", "true");
+}
+
+$("chatMenuBtn").onclick = () => chatMenu.hidden ? openChatMenu() : closeChatMenu();
+document.addEventListener("click", e => {
+  if (!chatMenu.hidden && !e.target.closest("#chatMenu, #chatMenuBtn")) closeChatMenu();
+});
+
+const legalHref = page => (isNative ? API_BASE + "/" : "") + page + ".html?lang=" + getLang();
+
+function setLegalLinks() {
+  document.querySelectorAll("[data-legal]").forEach(a => { a.href = legalHref(a.dataset.legal); });
+}
+
+function renderBlockedList() {
+  const box = $("blockedList");
+  box.replaceChildren();
+  if (!blocked.size) {
+    box.append(el("p", "hint", t("settings.noBlocked")));
+    return;
+  }
+  [...blocked].forEach(id => {
+    const u = users.get(id);
+    const r = el("div", "pick found blockedrow");
+    const img = el("img");
+    img.src = pic(u || { name: t("common.user") });
+    img.alt = "";
+    const btn = el("button", "addpill", t("block.unblock"));
+    btn.onclick = () => unblockFlow(id);
+    r.append(img, el("span", "n", u?.name || t("common.user")), btn);
+    box.append(r);
+  });
+}
+
+function openSettings() {
+  renderBlockedList();
+  setLegalLinks();
+  $("settingsSheet").hidden = false;
+  $("settingsSheet").querySelector(".gbody").scrollTop = 0;
+}
+
+function closeSettings() {
+  $("settingsSheet").hidden = true;
+}
+
+$("settingsClose").onclick = closeSettings;
+$("deleteAccountBtn").onclick = () => openDelete();
+
+const providerIds = () => (auth.currentUser?.providerData || []).map(p => p.providerId);
+let deleteBusy = false;
+let deleteMethod = "password";
+
+function setDeleteBusy(on) {
+  deleteBusy = on;
+  ["deleteOk", "deleteCancel", "deleteGoogle", "deletePassword"].forEach(id => { $(id).disabled = on; });
+  $("deleteOk").textContent = on ? t("delete.working") : t(deleteMethod === "password" ? "delete.confirm" : "delete.confirmGoogle");
+}
+
+function openDelete() {
+  const ids = providerIds();
+  const usesPassword = ids.includes("password");
+  const usesGoogle = ids.includes("google.com");
+  deleteMethod = usesPassword || !usesGoogle ? "password" : "google";
+  const showPassword = deleteMethod === "password";
+  $("deleteText").textContent = t("delete.text") + " " + t(showPassword ? "delete.textPassword" : "delete.textGoogle");
+  $("deletePassword").hidden = !showPassword;
+  $("deletePassword").value = "";
+  $("deleteGoogle").hidden = !(showPassword && usesGoogle);
+  $("deleteErr").textContent = "";
+  setDeleteBusy(false);
+  $("deleteBox").hidden = false;
+  (showPassword ? $("deletePassword") : $("deleteCancel")).focus();
+}
+
+function closeDelete() {
+  if (deleteBusy) return;
+  $("deleteBox").hidden = true;
+  $("deletePassword").value = "";
+}
+
+async function reauthenticate(method, password) {
+  const user = auth.currentUser;
+  if (method === "password") {
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+  } else if (isNative) {
+    const idToken = await nativeGoogleIdToken();
+    await reauthenticateWithCredential(user, GoogleAuthProvider.credential(idToken));
+  } else {
+    await reauthenticateWithPopup(user, new GoogleAuthProvider());
+  }
+}
+
+async function runDelete(method) {
+  if (deleteBusy || !auth.currentUser) return;
+  const password = $("deletePassword").value;
+  if (method === "password" && !password) {
+    $("deleteErr").textContent = t("delete.needPassword");
+    return;
+  }
+  $("deleteErr").textContent = "";
+  setDeleteBusy(true);
+  try {
+    await reauthenticate(method, password);
+  } catch (err) {
+    setDeleteBusy(false);
+    const code = err?.code || "";
+    if (/wrong-password|invalid-credential|invalid-login/.test(code)) $("deleteErr").textContent = t("delete.wrongPassword");
+    else if (!/cancel|closed|popup/i.test(code + " " + (err?.message || ""))) $("deleteErr").textContent = t("delete.failed");
+    return;
+  }
+  deleting = true;
+  const uid = auth.currentUser.uid;
+  closeChat();
+  calls.stop();
+  try {
+    await unregisterPush();
+    const token = await auth.currentUser.getIdToken(true);
+    const res = await fetch(API_BASE + "/api/delete-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: "{}",
+      cache: "no-store"
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || "server");
+    }
+  } catch (err) {
+    deleting = false;
+    setDeleteBusy(false);
+    if (auth.currentUser) {
+      calls.start(uid);
+      registerPush();
+      setPresence(true);
+    }
+    $("deleteErr").textContent = t(err.message === "reauth" ? "delete.reauth" : "delete.failed");
+    return;
+  }
+  try {
+    sessionStorage.setItem("kotha-deleted", "1");
+  } catch {
+    localStorage.removeItem("kotha-deleted");
+  }
+  localStorage.removeItem("kotha-session");
+  localStorage.removeItem("kotha-push");
+  await signOut(auth).catch(() => {});
+  try {
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+  } catch {
+    localStorage.removeItem("kotha-deleted");
+  }
+  location.reload();
+}
+
+$("deleteOk").onclick = () => runDelete(deleteMethod);
+$("deleteGoogle").onclick = () => runDelete("google");
+$("deleteCancel").onclick = closeDelete;
+$("deleteBox").onclick = e => { if (e.target === $("deleteBox")) closeDelete(); };
+$("deletePassword").onkeydown = e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    runDelete("password");
+  }
+};
+
+function showTermsGate() {
+  setLegalLinks();
+  $("termsGate").hidden = false;
+  $("termsAgree").focus();
+}
+
+$("termsAgree").onclick = () => {
+  if (!auth.currentUser) return;
+  $("termsGate").hidden = true;
+  setDoc(doc(db, "users", auth.currentUser.uid), { termsVersion: TERMS_VERSION, termsAt: serverTimestamp() }, { merge: true }).catch(() => showTermsGate());
+};
+
+$("termsDecline").onclick = async () => {
+  $("termsGate").hidden = true;
+  await unregisterPush();
+  await setPresence(false);
+  await signOut(auth);
+};
+
+$("deleteIcon").replaceChildren(icon("trash"));
+$("termsIcon").replaceChildren(icon("shield"));
+setLegalLinks();
+
+try {
+  if (sessionStorage.getItem("kotha-deleted") === "1") {
+    sessionStorage.removeItem("kotha-deleted");
+    toast(t("delete.done"));
+  }
+} catch {
+  localStorage.removeItem("kotha-deleted");
+}
+
 const calls = createCalls({
   auth,
   db,
@@ -1498,6 +2215,9 @@ document.addEventListener("keydown", e => {
   }
   if (e.key !== "Escape") return;
   if (!$("lightbox").hidden) $("lightbox").hidden = true;
+  else if (!$("deleteBox").hidden) closeDelete();
+  else if (!$("reportBox").hidden) closeReport();
+  else if (!$("settingsSheet").hidden) closeSettings();
   else if (!$("findSheet").hidden) closeFind();
   else if (!$("sheet").hidden) $("sheet").hidden = true;
   else if (!$("emojiPanel").hidden) $("emojiPanel").hidden = true;
@@ -1509,8 +2229,13 @@ const openChatFromNative = id => {
 };
 
 const handleBack = () => {
+  if (!$("termsGate").hidden) return true;
+  if (!$("deleteBox").hidden) { closeDelete(); return true; }
+  if (!$("reportBox").hidden) { closeReport(); return true; }
   if (!$("confirm").hidden) { closeConfirm(false); return true; }
   if (!$("choice").hidden) { closeChoice(null); return true; }
+  if (!chatMenu.hidden) { closeChatMenu(); return true; }
+  if (!$("settingsSheet").hidden) { closeSettings(); return true; }
   if (!$("msgMenu").hidden) { closeMenu(); return true; }
   if (!moreMenu.hidden) { closeMore(); return true; }
   if (!$("lightbox").hidden) { $("lightbox").hidden = true; return true; }
