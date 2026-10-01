@@ -375,7 +375,7 @@ export function createCalls({ auth, db, fs, push, $, toast, pic, getActive, getU
       kind = "missed";
       text = icon + " " + t("call.logMissed", { label });
     }
-    send({ text, callLog: { kind, video: !!c.video, secs: kind === "done" ? secs : 0 } }, { id: c.chatId, members: [myUid(), c.peerUid], reply: null }).catch(() => {});
+    send({ type: "call", text: "", callLog: { kind, video: !!c.video, secs: kind === "done" ? Math.min(secs, 86399) : 0, callId: c.id } }, { id: c.chatId, members: [myUid(), c.peerUid], reply: null }).catch(() => {});
   }
 
   function finish(c, reason, text, remote) {

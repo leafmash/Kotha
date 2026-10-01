@@ -75,6 +75,14 @@ const callLogText = log => {
   if (log.kind === "cancelled") return icon + " " + t("call.logCancelled", { label });
   return icon + " " + t("call.logMissed", { label });
 };
+const callEventText = log => {
+  const label = t(log.video ? "call.video" : "call.voice");
+  const secs = Number(log.secs) || 0;
+  if (log.kind === "done") return secs ? label + " · " + Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0") : label;
+  if (log.kind === "declined") return t("call.logDeclined", { label });
+  if (log.kind === "cancelled") return t("call.logCancelled", { label });
+  return t("call.logMissed", { label });
+};
 const lastText = value => displayStored(value);
 
 const icons = {
@@ -988,6 +996,19 @@ function renderMessages(all) {
       return;
     }
     hiddenRun = false;
+    if (m.callLog && typeof m.callLog === "object" && !m.deleted) {
+      const log = m.callLog;
+      const ev = el("div", "callev" + (log.kind === "missed" && !mine ? " bad" : ""));
+      ev.id = "m-" + d.id;
+      ev.append(icon(log.video ? "video" : "phone"), el("span", "", callEventText(log)), el("time", "", clock(m.at)));
+      ev.onclick = () => {
+        if (!active || active.group || $("hcalls").hidden) return;
+        calls.startCall(!!log.video, active);
+      };
+      box.append(ev);
+      prevFrom = null;
+      return;
+    }
     const b = el("div", "msg " + (mine ? "mine" : "theirs") + (prevFrom !== m.from ? " first" : ""));
     b.id = "m-" + d.id;
     prevFrom = m.from;
@@ -1052,12 +1073,11 @@ function renderMessages(all) {
 
     const picks = Object.values(m.reactions || {});
     if (picks.length && !m.deleted) {
-      const bar = el("div", "reacts");
-      [...new Set(picks)].forEach(em => {
-        const n = picks.filter(x => x === em).length;
-        bar.append(el("span", m.reactions[uid] === em ? "own" : "", n > 1 ? em + " " + n : em));
-      });
+      const bar = el("div", "reacts" + (m.reactions[uid] ? " own" : ""));
+      bar.append(el("span", "", [...new Set(picks)].slice(0, 3).join("")));
+      if (picks.length > 1) bar.append(el("small", "", String(picks.length)));
       b.append(bar);
+      b.classList.add("hasreact");
     }
     const meta = el("div", "meta");
     meta.append(el("span", "", clock(m.at)));
