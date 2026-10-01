@@ -144,5 +144,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v6
         with:
-          name: kotha-release-apk
+          name: kotha-apk
           path: android/app/build/outputs/apk/release/*.apk
