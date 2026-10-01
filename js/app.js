@@ -75,12 +75,18 @@ const callLogText = log => {
   if (log.kind === "cancelled") return icon + " " + t("call.logCancelled", { label });
   return icon + " " + t("call.logMissed", { label });
 };
-const callEventText = log => {
+const callEventKind = (log, mine) => (!mine && log.kind === "cancelled" ? "missed" : log.kind);
+const callEventText = (log, mine) => {
   const label = t(log.video ? "call.video" : "call.voice");
   const secs = Number(log.secs) || 0;
-  if (log.kind === "done") return secs ? label + " · " + Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0") : label;
-  if (log.kind === "declined") return t("call.logDeclined", { label });
-  if (log.kind === "cancelled") return t("call.logCancelled", { label });
+  const kind = callEventKind(log, mine);
+  if (kind === "done") {
+    const base = t(mine ? "call.outgoing" : "call.incoming", { label });
+    return secs ? base + " · " + Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0") : base;
+  }
+  if (kind === "declined") return t("call.logDeclined", { label });
+  if (kind === "cancelled") return t("call.logCancelled", { label });
+  if (mine) return t("call.outgoing", { label }) + " · " + t("call.noAnswer");
   return t("call.logMissed", { label });
 };
 const lastText = value => displayStored(value);
@@ -998,9 +1004,10 @@ function renderMessages(all) {
     hiddenRun = false;
     if (m.callLog && typeof m.callLog === "object" && !m.deleted) {
       const log = m.callLog;
-      const ev = el("div", "callev" + (log.kind === "missed" && !mine ? " bad" : ""));
+      const bad = !mine && ["missed", "cancelled"].includes(log.kind);
+      const ev = el("div", "callev " + (mine ? "mine" : "theirs") + (bad ? " bad" : ""));
       ev.id = "m-" + d.id;
-      ev.append(icon(log.video ? "video" : "phone"), el("span", "", callEventText(log)), el("time", "", clock(m.at)));
+      ev.append(icon(mine ? "arrowOut" : "arrowIn", "dirico"), icon(log.video ? "video" : "phone"), el("span", "", callEventText(log, mine)), el("time", "", clock(m.at)));
       ev.onclick = () => {
         if (!active || active.group || $("hcalls").hidden) return;
         calls.startCall(!!log.video, active);
