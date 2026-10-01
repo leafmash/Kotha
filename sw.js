@@ -1,4 +1,4 @@
-const CACHE = "kotha-v28";
+const CACHE = "kotha-v30";
 const SHELL = ["./", "index.html", "css/style.css", "js/app.js", "js/call.js", "js/i18n.js", "js/push-trigger.js", "icon.svg", "icon-192.png"];
 
 self.addEventListener("install", e => {

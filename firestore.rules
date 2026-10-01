@@ -42,10 +42,65 @@ service cloud.firestore {
         && call.caller == request.auth.uid
         && call.chatId == chatId;
     }
+    function adminOf(c) {
+      return c.get('admin', '') == request.auth.uid || request.auth.uid in c.get('admins', []);
+    }
+    function validSysLog(chatId) {
+      let d = request.resource.data;
+      let s = d.sys;
+      let c = chatDoc(chatId);
+      return d.type == 'system'
+        && d.text == ''
+        && s is map
+        && s.keys().hasOnly(['kind', 'by', 'names', 'target', 'name'])
+        && s.keys().hasAll(['kind'])
+        && s.kind in ['added', 'removed', 'left', 'renamed', 'promoted', 'demoted', 'photo', 'desc']
+        && c.get('group', false) == true
+        && (s.kind == 'left' || adminOf(c));
+    }
     function leavesGroup() {
-      return resource.data.get('group', false) == true
-        && request.resource.data.members == resource.data.members.removeAll([request.auth.uid])
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members']);
+      let o = resource.data;
+      let n = request.resource.data;
+      let rest = o.get('admins', []).removeAll([request.auth.uid]);
+      return o.get('group', false) == true
+        && n.members == o.members.removeAll([request.auth.uid])
+        && n.diff(o).affectedKeys().hasOnly(['members', 'admins', 'admin'])
+        && n.get('admins', []).hasAll(rest)
+        && n.get('admins', []).hasOnly(n.members)
+        && n.get('admins', []).size() <= rest.size() + 1
+        && (n.get('admin', '') == o.get('admin', '') || (o.get('admin', '') == request.auth.uid && n.get('admin', '') in n.members))
+        && (n.get('admins', []).size() <= rest.size() || adminOf(o));
+    }
+    function groupMetaOk() {
+      let o = resource.data;
+      let n = request.resource.data;
+      let changed = n.diff(o).affectedKeys();
+      return o.get('group', false) != true
+        || !changed.hasAny(['name', 'description', 'photo', 'admin', 'admins', 'adminOnly', 'group'])
+        || (adminOf(o)
+          && !changed.hasAny(['admin', 'group'])
+          && n.get('name', '') is string
+          && n.get('name', '').size() > 0
+          && n.get('name', '').size() <= 40
+          && n.get('description', '') is string
+          && n.get('description', '').size() <= 300
+          && n.get('photo', '') is string
+          && n.get('photo', '').size() <= 600
+          && n.get('adminOnly', false) is bool
+          && n.get('admins', []).hasOnly(n.members));
+    }
+    function membersChangeOk() {
+      let o = resource.data;
+      let n = request.resource.data;
+      return n.members == o.members
+        || (o.get('group', false) == true
+          && adminOf(o)
+          && n.members.toSet().size() == n.members.size()
+          && n.members.size() <= 256
+          && n.members.size() >= 1
+          && (n.members.hasAll(o.members)
+            || (o.members.hasAll(n.members)
+              && (!('admin' in o) || o.admin in n.members))));
     }
     match /users/{userId} {
       allow get: if signedIn();
@@ -134,16 +189,22 @@ service cloud.firestore {
       allow update: if signedIn()
         && request.auth.uid in resource.data.members
         && !blockedByOther(resource.data)
-        && (request.resource.data.members == resource.data.members || leavesGroup());
+        && (leavesGroup() || (groupMetaOk() && membersChangeOk()));
       match /messages/{messageId} {
         allow read: if isMember(chatId);
         allow create: if isMember(chatId)
           && request.resource.data.from == request.auth.uid
           && !blockedEitherWay(chatDoc(chatId))
-          && (('callLog' in request.resource.data) ? validCallLog(chatId) : request.resource.data.get('type', 'text') != 'call');
+          && (chatDoc(chatId).get('group', false) != true || !chatDoc(chatId).get('adminOnly', false) || adminOf(chatDoc(chatId)) || request.resource.data.get('type', 'text') == 'system')
+          && (('callLog' in request.resource.data)
+            ? validCallLog(chatId)
+            : (('sys' in request.resource.data)
+              ? validSysLog(chatId)
+              : (request.resource.data.get('type', 'text') != 'call' && request.resource.data.get('type', 'text') != 'system')));
         allow update: if isMember(chatId)
           && (resource.data.from == request.auth.uid
             && request.resource.data.get('callLog', null) == resource.data.get('callLog', null)
+            && request.resource.data.get('sys', null) == resource.data.get('sys', null)
             && request.resource.data.get('type', 'text') == resource.data.get('type', 'text')
             || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reactions', 'hiddenFor']));
       }
