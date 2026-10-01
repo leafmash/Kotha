@@ -1,5 +1,6 @@
 package com.kotha.app
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -100,13 +101,14 @@ class ChatMessagingService : MessagingService() {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
+        notification.flags = notification.flags or Notification.FLAG_INSISTENT
 
         NotificationManagerCompat.from(context).notify(notificationId, notification)
     }
 
     companion object {
-        const val MESSAGE_CHANNEL_ID = "kotha_chat_channel_v1"
-        const val CALL_CHANNEL_ID = "kotha_call_channel_v1"
+        const val MESSAGE_CHANNEL_ID = "kotha_chat_channel_v2"
+        const val CALL_CHANNEL_ID = "kotha_call_channel_v2"
         private const val CALL_TIMEOUT_MS = 45000L
         private const val DELIVERY_ATTEMPTS = 3
         private const val DELIVERY_RETRY_MS = 1500L
@@ -162,7 +164,13 @@ class ChatMessagingService : MessagingService() {
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
-            channel.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE), attributes)
+            val customRes = context.resources.getIdentifier("kotha_call", "raw", context.packageName)
+            val soundUri = if (customRes != 0) {
+                Uri.parse("android.resource://${context.packageName}/raw/kotha_call")
+            } else {
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            }
+            channel.setSound(soundUri, attributes)
             channel.enableVibration(true)
             channel.vibrationPattern = longArrayOf(0, 400, 200, 400, 200, 400)
             channel.lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
