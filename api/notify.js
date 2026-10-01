@@ -82,14 +82,46 @@ const previewOf = (m, text) => {
   return labels[m.type] || m.text || "";
 };
 
-const sendTo = async (db, uid, build, ttlMs) => {
+const mutedUntil = (muted, chatId) => {
+  const until = muted && muted[chatId];
+  return typeof until === "number" && until > Date.now();
+};
+
+const totalUnread = async (db, uid, muted) => {
+  const [chatsSnap, blockedSnap] = await Promise.all([
+    db.collection("chats").where("members", "array-contains", uid).get(),
+    db.collection(`users/${uid}/blocked`).get()
+  ]);
+  const blocked = new Set(blockedSnap.docs.map(d => d.id));
+  let total = 0;
+  chatsSnap.forEach(d => {
+    if (mutedUntil(muted, d.id)) return;
+    const chat = d.data();
+    if (chat.group !== true && (chat.members || []).some(m => blocked.has(m))) return;
+    total += Number((chat.unread || {})[uid]) || 0;
+  });
+  return total;
+};
+
+const sendTo = async (db, uid, build, ttlMs, opts = {}) => {
   const ref = db.doc(`pushTokens/${uid}`);
   const snap = await ref.get();
-  const tokens = snap.exists ? snap.data().tokens || [] : [];
+  const stored = snap.exists ? snap.data() : {};
+  const tokens = stored.tokens || [];
   if (!tokens.length) return 0;
+  const muted = stored.muted || {};
+  const data = { ...build.data };
+  if (opts.chatId) data.muted = mutedUntil(muted, opts.chatId) ? "1" : "0";
+  if (opts.badge) {
+    try {
+      data.badge = String(await totalUnread(db, uid, muted));
+    } catch {
+      delete data.badge;
+    }
+  }
   const res = await getMessaging(getApp()).sendEachForMulticast({
     tokens,
-    data: build.data,
+    data,
     webpush: { headers: { Urgency: "high", TTL: String(Math.floor(ttlMs / 1000)) } },
     android: { priority: "high", ttl: ttlMs }
   });
@@ -135,13 +167,15 @@ const handleMessage = async (db, uid, body) => {
     const senderName = sender.name || "";
     const recipients = members.filter(m => m !== uid);
     const counts = await Promise.all(recipients.map(async rid => {
-      const userSnap = await db.doc(`users/${rid}`).get();
+      const [userSnap, blockSnap] = await Promise.all([db.doc(`users/${rid}`).get(), db.doc(`users/${rid}/blocked/${uid}`).get()]);
+      if (blockSnap.exists) return 0;
       const text = TEXT[langOf(userSnap)];
       const preview = previewOf(message, text);
       if (!preview) return 0;
       return sendTo(db, rid, {
         data: {
           type: "message",
+          messageId,
           title: chat.group ? chat.name || text.group : senderName,
           body: chat.group ? `${senderName}: ${preview}` : preview,
           chatId,
@@ -152,7 +186,7 @@ const handleMessage = async (db, uid, body) => {
           group: chat.group ? "1" : "0",
           chatName: chat.group ? chat.name || "" : ""
         }
-      }, 86400000);
+      }, 86400000, { chatId, badge: true });
     }));
     return { status: 200, ok: true, sent: counts.reduce((a, b) => a + b, 0) };
   } catch (err) {
@@ -170,6 +204,8 @@ const handleCall = async (db, uid, body) => {
   const peek = snap.data();
   if (peek.caller !== uid) return { status: 403, error: "forbidden" };
   if (peek.status !== "ringing") return { status: 200, ok: true, sent: 0, skipped: true };
+  const blockSnap = await db.doc(`users/${peek.callee}/blocked/${uid}`).get();
+  if (blockSnap.exists) return { status: 200, ok: true, sent: 0, skipped: true };
   const call = await claim(db, callRef);
   if (call === false) return { status: 200, ok: true, sent: 0, duplicate: true };
   if (!call) return { status: 404, error: "missing" };
