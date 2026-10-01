@@ -431,3 +431,8 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .reacts.own{border-color:var(--accent)}
 .msg.mine .reacts{right:10px}
 .msg.theirs .reacts{left:10px}
+.callev.mine{align-self:flex-end}
+.callev.theirs{align-self:flex-start}
+.callev .dirico{margin-right:-4px;display:inline-flex}
+.callev .dirico svg{width:14px;height:14px}
+.callev.mine .dirico svg{color:var(--ok)}
