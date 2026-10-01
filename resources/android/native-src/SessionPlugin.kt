@@ -27,6 +27,7 @@ class SessionPlugin : Plugin() {
     @PluginMethod
     fun clearSession(call: PluginCall) {
         SessionStore.clear(context)
+        BadgeHelper.apply(context, 0)
         ChatConversationStore.clearAll(context)
         NotificationManagerCompat.from(context).cancelAll()
         call.resolve()

@@ -36,7 +36,26 @@ class ChatMessagingService : MessagingService() {
         val context = applicationContext
         when {
             data["type"] == "call" -> showCall(context, data)
-            !data["chatId"].isNullOrBlank() -> serviceScope.launch { showMessage(context, data) }
+            !data["chatId"].isNullOrBlank() -> serviceScope.launch { handleMessage(context, data) }
+        }
+    }
+
+    private suspend fun handleMessage(context: Context, data: Map<String, String>) {
+        data["badge"]?.toIntOrNull()?.let { BadgeHelper.apply(context, it) }
+        reportDelivered(context, data)
+        if (data["muted"] == "1") return
+        showMessage(context, data)
+    }
+
+    private fun reportDelivered(context: Context, data: Map<String, String>) {
+        val chatId = data["chatId"] ?: return
+        val messageId = data["messageId"]?.takeIf { it.isNotBlank() } ?: return
+        val session = SessionStore.read(context) ?: return
+        if (data["senderUid"] == session.uid) return
+        for (attempt in 0 until DELIVERY_ATTEMPTS) {
+            if (attempt > 0) Thread.sleep(DELIVERY_RETRY_MS * attempt)
+            val outcome = FirestoreRest.markDelivered(context, session, chatId, messageId)
+            if (outcome != FirestoreRest.Outcome.RETRY) return
         }
     }
 
@@ -89,6 +108,8 @@ class ChatMessagingService : MessagingService() {
         const val MESSAGE_CHANNEL_ID = "kotha_chat_channel_v1"
         const val CALL_CHANNEL_ID = "kotha_call_channel_v1"
         private const val CALL_TIMEOUT_MS = 45000L
+        private const val DELIVERY_ATTEMPTS = 3
+        private const val DELIVERY_RETRY_MS = 1500L
 
         suspend fun buildAndShowNotification(context: Context, chatId: String, otherUid: String, title: String, group: Boolean) {
             val notificationId = chatId.hashCode()

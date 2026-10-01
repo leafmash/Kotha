@@ -30,6 +30,12 @@ class DeepLinkPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun setBadge(call: PluginCall) {
+        BadgeHelper.apply(context, call.getInt("count") ?: 0)
+        call.resolve()
+    }
+
+    @PluginMethod
     fun setActiveChat(call: PluginCall) {
         val chatId = call.getString("chatId")
         if (chatId == null) {

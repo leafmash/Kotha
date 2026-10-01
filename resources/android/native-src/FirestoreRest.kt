@@ -56,6 +56,44 @@ object FirestoreRest {
         }
     }
 
+    fun markDelivered(context: Context, session: Session, chatId: String, messageId: String): Outcome {
+        val token = when (val result = refreshIdToken(context, session)) {
+            is TokenResult.Ok -> result.token
+            TokenResult.Retry -> return Outcome.RETRY
+            TokenResult.Rejected -> return Outcome.FAILURE
+        }
+
+        val database = "projects/${session.projectId}/databases/(default)/documents"
+        val path = "$database/chats/$chatId/messages/$messageId"
+        val current = request("$FIRESTORE_URL/$path", "GET", null, null, token) ?: return Outcome.RETRY
+        if (current.code == 429 || current.code >= 500) return Outcome.RETRY
+        if (current.code !in 200..299) return Outcome.FAILURE
+        val status = JSONObject(current.body)
+            .optJSONObject("fields")
+            ?.optJSONObject("status")
+            ?.optString("stringValue")
+        if (status != "sent") return Outcome.SUCCESS
+
+        val write = JSONObject()
+            .put("update", JSONObject().put("name", path).put("fields", JSONObject().put("status", stringField("delivered"))))
+            .put("updateMask", JSONObject().put("fieldPaths", JSONArray().put("status")))
+            .put("currentDocument", JSONObject().put("exists", true))
+        val commit = JSONObject().put("writes", JSONArray().put(write))
+        val response = request(
+            "$FIRESTORE_URL/$database:commit",
+            "POST",
+            commit.toString(),
+            "application/json",
+            token
+        ) ?: return Outcome.RETRY
+
+        return when {
+            response.code in 200..299 -> Outcome.SUCCESS
+            response.code == 429 || response.code >= 500 -> Outcome.RETRY
+            else -> Outcome.FAILURE
+        }
+    }
+
     private fun triggerPush(session: Session, token: String, chatId: String, messageId: String) {
         if (session.apiBase.isBlank()) return
         val body = JSONObject()
