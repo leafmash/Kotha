@@ -32,6 +32,7 @@
     <button class="ghost" id="googleBtn" data-i18n="auth.google">Continue with Google</button>
     <p class="switch"><span id="switchText">New here?</span> <a href="#" id="switchLink">Create account</a></p>
     <p class="err" id="authErr"></p>
+    <p class="legalnote"><span data-i18n="auth.legalPrefix">By continuing you agree to our</span> <a data-legal="terms" target="_blank" rel="noopener" data-i18n="legal.terms">Terms of Use</a> <span data-i18n="auth.legalAnd">and</span> <a data-legal="privacy" target="_blank" rel="noopener" data-i18n="legal.privacy">Privacy Policy</a><span data-i18n="auth.legalSuffix">.</span></p>
     <p class="switch"><a href="#" id="langLink">বাংলা</a></p>
   </div>
 </section>
@@ -43,6 +44,7 @@
     <div class="rail-top">
       <button class="rbtn on" data-f="all" title="Chats" data-i18n-title="common.chats"><svg viewBox="0 0 24 24"><path d="M12 3C6.5 3 2 6.8 2 11.5c0 2.4 1.2 4.6 3.1 6.1L4 21l3.9-1.9c1.3.5 2.7.8 4.1.8 5.5 0 10-3.8 10-8.5S17.5 3 12 3z"/></svg><span class="rbadge" id="railBadge" hidden></span></button>
       <button class="rbtn" data-f="group" title="Groups" data-i18n-title="common.groups"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6 6 0 0 1 3.5 6"/></svg></button>
+      <button class="rbtn" data-f="calls" title="Calls" data-i18n-title="common.calls"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></button>
     </div>
     <div class="rail-bottom">
       <button class="rprofile" id="railMe" title="Change photo" data-i18n-title="common.changePhoto"><img id="railImg" alt=""></button>
@@ -64,6 +66,7 @@
     <nav id="tabs">
       <button class="on" data-f="all"><svg viewBox="0 0 24 24"><path d="M12 3C6.5 3 2 6.8 2 11.5c0 2.4 1.2 4.6 3.1 6.1L4 21l3.9-1.9c1.3.5 2.7.8 4.1.8 5.5 0 10-3.8 10-8.5S17.5 3 12 3z"/></svg><span data-i18n="common.chats">Chats</span><i class="tbadge" id="tabBadge" hidden></i></button>
       <button data-f="group"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6 6 0 0 1 3.5 6"/></svg><span data-i18n="common.groups">Groups</span></button>
+      <button data-f="calls"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg><span data-i18n="common.calls">Calls</span></button>
     </nav>
   </aside>
 
@@ -82,12 +85,16 @@
           <button id="voiceCallBtn" title="Voice call" data-i18n-title="chat.voiceCall"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></button>
           <button id="videoCallBtn" title="Video call" data-i18n-title="chat.videoCall"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="12" height="12" rx="2.5"/><path d="M15 10.5l6-3.5v10l-6-3.5"/></svg></button>
         </div>
+        <button id="chatMenuBtn" title="More options" data-i18n-title="chat.more" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24"><circle class="fill" cx="12" cy="5" r="1.8"/><circle class="fill" cx="12" cy="12" r="1.8"/><circle class="fill" cx="12" cy="19" r="1.8"/></svg></button>
+        <div id="chatMenu" hidden role="menu"></div>
       </header>
+      <div id="offlineBar" hidden data-i18n="net.offline">You are offline. Messages will be sent when you are back online.</div>
       <div id="messages"></div>
       <button id="fab" hidden title="Scroll to bottom" data-i18n-title="chat.scrollDown"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
       <div id="replyBar" hidden><div><small data-i18n="chat.replyingTo">Replying to</small><p id="replyText"></p></div><button id="replyCancel" title="Cancel" data-i18n-title="common.cancel"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       <div id="emojiPanel" hidden></div>
-      <footer>
+      <div id="blockBar" hidden><p id="blockText"></p><button id="unblockBtn" data-i18n="block.unblock">Unblock</button></div>
+      <footer id="composer">
         <button id="emojiBtn" title="Emoji" data-i18n-title="chat.emoji"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg></button>
         <button id="attachBtn" title="File" data-i18n-title="common.file"><svg viewBox="0 0 24 24"><path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.5 3.5 0 0 1 5 5L10 17.5a2 2 0 0 1-3-3l7.5-7.5"/></svg></button>
         <textarea id="input" rows="1" placeholder="Message" data-i18n-placeholder="chat.messagePlaceholder"></textarea>
@@ -122,6 +129,23 @@
     </div>
   </div>
 </div>
+<div id="settingsSheet" hidden>
+  <div class="panel">
+    <header>
+      <button id="settingsClose" title="Back" data-i18n-title="common.back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="ht"><b data-i18n="settings.title">Settings</b></div>
+    </header>
+    <div class="gbody">
+      <div class="glabel" data-i18n="settings.blocked">Blocked users</div>
+      <div id="blockedList"></div>
+      <div class="glabel" data-i18n="settings.about">About</div>
+      <a class="srow" data-legal="privacy" target="_blank" rel="noopener"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/></svg></span><span data-i18n="legal.privacy">Privacy Policy</span></a>
+      <a class="srow" data-legal="terms" target="_blank" rel="noopener"><span class="ico"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6"/></svg></span><span data-i18n="legal.terms">Terms of Use</span></a>
+      <div class="glabel" data-i18n="settings.account">Account</div>
+      <button class="srow danger" id="deleteAccountBtn"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3"/></svg></span><span data-i18n="settings.deleteAccount">Delete account</span></button>
+    </div>
+  </div>
+</div>
 <div id="confirm" hidden role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmText">
   <div class="dialog">
     <div class="dicon" id="confirmIcon"></div>
@@ -130,6 +154,45 @@
     <div class="dbtns">
       <button class="dcancel" id="confirmCancel" data-i18n="common.cancel">Cancel</button>
       <button class="dok" id="confirmOk"></button>
+    </div>
+  </div>
+</div>
+<div id="reportBox" hidden role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+  <div class="dialog">
+    <h3 id="reportTitle"></h3>
+    <p data-i18n="report.text">Choose what best describes the problem. Your report is confidential and the person won't be told.</p>
+    <div id="reportReasons" role="radiogroup"></div>
+    <textarea id="reportNote" rows="3" maxlength="500" placeholder="Add details (optional)" data-i18n-placeholder="report.noteHint"></textarea>
+    <label id="reportBlockRow" class="checkrow"><input type="checkbox" id="reportBlock"><span data-i18n="report.alsoBlock">Also block this user</span></label>
+    <div class="dbtns">
+      <button class="dcancel" id="reportCancel" data-i18n="common.cancel">Cancel</button>
+      <button class="dok" id="reportSubmit" data-i18n="report.submit">Send report</button>
+    </div>
+  </div>
+</div>
+<div id="deleteBox" hidden role="dialog" aria-modal="true" aria-labelledby="deleteTitle">
+  <div class="dialog">
+    <div class="dicon" id="deleteIcon"></div>
+    <h3 id="deleteTitle" data-i18n="delete.title">Delete your account?</h3>
+    <p id="deleteText"></p>
+    <input id="deletePassword" type="password" autocomplete="current-password" placeholder="Password" data-i18n-placeholder="delete.password" hidden>
+    <p class="derr" id="deleteErr" role="alert"></p>
+    <div class="dbtns">
+      <button class="dcancel" id="deleteCancel" data-i18n="common.cancel">Cancel</button>
+      <button class="dok" id="deleteOk"></button>
+    </div>
+    <button class="dlink" id="deleteGoogle" hidden data-i18n="delete.useGoogle">Use Google instead</button>
+  </div>
+</div>
+<div id="termsGate" hidden role="dialog" aria-modal="true" aria-labelledby="termsTitle">
+  <div class="dialog">
+    <div class="dicon" id="termsIcon"></div>
+    <h3 id="termsTitle" data-i18n="terms.gateTitle">Terms and Privacy</h3>
+    <p data-i18n="terms.gateText">Please review and accept our Terms of Use and Privacy Policy to continue. Kotha has zero tolerance for abusive or objectionable content.</p>
+    <p class="dlinks"><a data-legal="terms" target="_blank" rel="noopener" data-i18n="legal.terms">Terms of Use</a> · <a data-legal="privacy" target="_blank" rel="noopener" data-i18n="legal.privacy">Privacy Policy</a></p>
+    <div class="dbtns">
+      <button class="dcancel" id="termsDecline" data-i18n="signout.ok">Sign out</button>
+      <button class="dok" id="termsAgree" data-i18n="terms.agree">I agree</button>
     </div>
   </div>
 </div>

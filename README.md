@@ -10,6 +10,9 @@ Firebase (Auth + Firestore + Cloud Messaging) ও Cloudinary ভিত্তি�
 | `api/turn.js` | কলের জন্য TURN ক্রেডেনশিয়াল (Vercel Function) |
 | `api/notify.js` | মেসেজ ও কলের পুশ নোটিফিকেশন পাঠায় (Vercel Function, Firebase Admin) |
 | `js/i18n.js` | ইংরেজি/বাংলা ভাষা সুইচ (ডিফল্ট ইংরেজি) |
+| `api/delete-account.js`, `api/_erase.js`, `api/_firebase.js` | অ্যাকাউন্ট ও সব তথ্য মোছে (Firebase Admin), ফাইল Cloudinary থেকেও সরায় |
+| `privacy.html`, `terms.html`, `delete-account.html` | গোপনীয়তা নীতি, শর্তাবলি, অ্যাকাউন্ট মোছার পাতা (Play Store লিংক) |
+| `scripts/erase-user.js` | কেউ ইমেইলে অনুরোধ করলে হাতে অ্যাকাউন্ট মোছার স্ক্রিপ্ট |
 | `js/push-trigger.js` | মেসেজ/কল লেখার পর `api/notify` ডাকার helper |
 | `sw.js` | সার্ভিস ওয়ার্কার (অফলাইন ক্যাশ ও পুশ নোটিফিকেশন) |
 | `manifest.json`, `icon*.png/svg` | PWA ইনস্টল |
@@ -69,3 +72,26 @@ git push -u origin main
 ## Android APK
 
 `ANDROID.md` দেখুন।
+
+## ব্লক, রিপোর্ট, অ্যাকাউন্ট মোছা ও আইনি পাতা
+
+অ্যাপে যা যোগ হয়েছে:
+
+- **ব্লক:** চ্যাটের ওপরের তিন-ডট মেনু, অথবা গ্রুপে অন্যের মেসেজে লং প্রেস থেকে। ব্লক করা ব্যক্তি মেসেজ, কল ও নোটিফিকেশন পাঠাতে পারে না (Firestore নিয়ম ও `api/notify.js` দুই জায়গায় আটকানো)। তালিকা ও আনব্লক: তিন-ডট মেনু, সেটিংস।
+- **রিপোর্ট:** ব্যবহারকারী, মেসেজ ও গ্রুপ রিপোর্ট করা যায়। রিপোর্ট Firestore-এর `reports` কালেকশনে জমা হয়, অ্যাপ থেকে পড়া যায় না।
+- **গ্রুপ ছাড়া:** গ্রুপ চ্যাটের মেনুতে।
+- **অ্যাকাউন্ট মোছা:** সেটিংসে। পাসওয়ার্ড বা Google দিয়ে আবার পরিচয় নিশ্চিত করে `api/delete-account` ডাকে।
+- **শর্ত গ্রহণ:** সাইন আপ পাতায় লিংক আছে। প্রথমবার ঢোকার পর (পুরোনো ব্যবহারকারীদেরও) একবার "আমি সম্মত" চাওয়া হয়। শর্ত বদলালে `js/config.js`-এর `TERMS_VERSION` বদলান, সবার কাছে আবার আসবে।
+
+### ডিপ্লয়ের আগে অবশ্যই করণীয়
+
+1. `privacy.html`, `terms.html`, `delete-account.html`-এ `support@example.com` খুঁজে আপনার আসল ইমেইল বসান।
+2. `firestore.rules` আবার পাবলিশ করুন (`firebase deploy --only firestore:rules`)। নতুন নিয়ম ছাড়া ব্লক ও রিপোর্ট কাজ করবে না।
+3. Vercel → Environment Variables-এ অ্যাকাউন্ট মোছার সময় Cloudinary-র ফাইল সরাতে এই তিনটি দিন (না দিলে ডাটা মুছবে, কিন্তু Cloudinary-র ফাইল থেকে যাবে):
+   - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+4. Vercel-এ Redeploy করুন। `FIREBASE_SERVICE_ACCOUNT` আগে থেকেই থাকতে হবে।
+5. Google Play Console → App content → Privacy policy-তে `https://<আপনার-ডোমেইন>/privacy.html` এবং Data safety → Account deletion-এ `https://<আপনার-ডোমেইন>/delete-account.html` দিন।
+6. রিপোর্ট পর্যালোচনা: Firebase Console → Firestore → `reports`। শর্তে ২৪ ঘণ্টার মধ্যে ব্যবস্থার কথা আছে, তাই নিয়মিত দেখতে হবে।
+7. ইমেইলে মোছার অনুরোধ এলে: `FIREBASE_SERVICE_ACCOUNT='...' node scripts/erase-user.js user@example.com`
+
+নোট: গোপনীয়তা নীতি ও শর্তাবলি সাধারণ টেমপ্লেট। প্রকাশের আগে নিজের অ্যাপের সঙ্গে মিলিয়ে দেখে নিন।

@@ -31,7 +31,7 @@
       ]
     },
     {
-      "source": "/(index.html|js/app.js|js/call.js|js/i18n.js|js/push-trigger.js|css/style.css)",
+      "source": "/(index.html|privacy.html|terms.html|delete-account.html|js/app.js|js/call.js|js/i18n.js|js/config.js|js/push-trigger.js|css/style.css)",
       "headers": [
         {
           "key": "Cache-Control",

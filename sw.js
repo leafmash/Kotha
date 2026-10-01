@@ -1,4 +1,4 @@
-const CACHE = "kotha-v21";
+const CACHE = "kotha-v24";
 const SHELL = ["./", "index.html", "css/style.css", "js/app.js", "js/call.js", "js/i18n.js", "js/push-trigger.js", "icon.svg", "icon-192.png"];
 
 self.addEventListener("install", e => {
@@ -39,16 +39,19 @@ self.addEventListener("push", e => {
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
       if (list.some(c => c.visibilityState === "visible" && c.focused)) return;
       const isCall = d.type === "call";
+      const quiet = !isCall && d.muted === "1";
+      const tag = isCall ? "call-" + (d.chatId || "") : d.chatId || "kotha";
       return self.registration.showNotification(d.title || "কথা", {
         body: d.body || "",
         icon: "icon-192.png",
         badge: "icon-192.png",
-        tag: isCall ? "call-" + (d.chatId || "") : d.chatId || "kotha",
-        renotify: true,
+        tag,
+        renotify: !quiet,
+        silent: quiet,
         requireInteraction: isCall,
         vibrate: isCall ? [400, 200, 400, 200, 400] : undefined,
         data: { chatId: d.chatId || "" }
-      });
+      }).then(() => quiet ? self.registration.getNotifications({ tag }).then(list => list.forEach(n => n.close())) : null);
     })
   );
 });
