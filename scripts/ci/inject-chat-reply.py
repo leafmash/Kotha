@@ -93,6 +93,12 @@ if "com.google.firebase:firebase-messaging" not in app_gradle:
         "dependencies {\n    implementation platform(\"com.google.firebase:firebase-bom:33.1.2\")\n    implementation \"com.google.firebase:firebase-messaging\"\n    implementation \"androidx.work:work-runtime-ktx:2.9.1\"\n    implementation \"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3\"",
         1
     )
+if "ShortcutBadger" not in app_gradle:
+    app_gradle = app_gradle.replace(
+        "dependencies {",
+        "dependencies {\n    implementation \"me.leolin:ShortcutBadger:1.1.22@aar\"",
+        1
+    )
 with open(app_gradle_path, "w") as f:
     f.write(app_gradle)
 
