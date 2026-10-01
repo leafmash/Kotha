@@ -85,7 +85,7 @@ git push -u origin main
 
 ### ডিপ্লয়ের আগে অবশ্যই করণীয়
 
-1. `privacy.html`, `terms.html`, `delete-account.html`-এ `support@example.com` খুঁজে আপনার আসল ইমেইল বসান।
+1. `privacy.html`, `terms.html`, `delete-account.html`-এ `in.with.imran@gmail.com` খুঁজে আপনার আসল ইমেইল বসান।
 2. `firestore.rules` আবার পাবলিশ করুন (`firebase deploy --only firestore:rules`)। নতুন নিয়ম ছাড়া ব্লক ও রিপোর্ট কাজ করবে না।
 3. Vercel → Environment Variables-এ অ্যাকাউন্ট মোছার সময় Cloudinary-র ফাইল সরাতে এই তিনটি দিন (না দিলে ডাটা মুছবে, কিন্তু Cloudinary-র ফাইল থেকে যাবে):
    - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
