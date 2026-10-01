@@ -25,6 +25,23 @@ service cloud.firestore {
     function blockedEitherWay(chat) {
       return isDirect(chat) && (hasBlocked(otherMember(chat), request.auth.uid) || hasBlocked(request.auth.uid, otherMember(chat)));
     }
+    function validCallLog(chatId) {
+      let d = request.resource.data;
+      let log = d.callLog;
+      let call = get(/databases/$(database)/documents/calls/$(log.callId)).data;
+      return d.type == 'call'
+        && d.text == ''
+        && log is map
+        && log.keys().hasOnly(['kind', 'video', 'secs', 'callId'])
+        && log.kind in ['done', 'declined', 'cancelled', 'missed']
+        && log.video is bool
+        && log.secs is int
+        && log.secs >= 0
+        && log.secs < 86400
+        && log.callId is string
+        && call.caller == request.auth.uid
+        && call.chatId == chatId;
+    }
     function leavesGroup() {
       return resource.data.get('group', false) == true
         && request.resource.data.members == resource.data.members.removeAll([request.auth.uid])
@@ -122,9 +139,12 @@ service cloud.firestore {
         allow read: if isMember(chatId);
         allow create: if isMember(chatId)
           && request.resource.data.from == request.auth.uid
-          && !blockedEitherWay(chatDoc(chatId));
+          && !blockedEitherWay(chatDoc(chatId))
+          && (('callLog' in request.resource.data) ? validCallLog(chatId) : request.resource.data.get('type', 'text') != 'call');
         allow update: if isMember(chatId)
           && (resource.data.from == request.auth.uid
+            && request.resource.data.get('callLog', null) == resource.data.get('callLog', null)
+            && request.resource.data.get('type', 'text') == resource.data.get('type', 'text')
             || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reactions', 'hiddenFor']));
       }
     }
