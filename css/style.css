@@ -111,9 +111,6 @@ svg .fill{fill:currentColor}
 
 #pane{position:relative}
 .sender{font-size:13px;font-weight:600;margin-bottom:1px}
-.reacts{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
-.reacts span{background:rgba(127,127,127,.22);border-radius:10px;padding:0 7px;font-size:13px}
-.reacts span.own{box-shadow:inset 0 0 0 1.5px var(--accent)}
 .msg a{color:inherit;text-decoration:underline;word-break:break-all}
 #fab{position:absolute;right:16px;bottom:76px;width:42px;height:42px;border-radius:50%;background:var(--panel);border:1px solid var(--sep);display:grid;place-items:center;z-index:3;color:var(--muted)}
 
@@ -309,7 +306,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .findbox{flex:1;min-height:0;overflow-y:auto;padding-bottom:max(16px,env(safe-area-inset-bottom))}
 .fhint{color:var(--muted);font-size:14px;line-height:1.55;padding:6px 16px 10px}
 #findResult .row{height:70px}
-.hcalls{display:flex;margin-left:auto;flex:none}
+.hcalls{display:flex;flex:none}
 .hcalls[hidden]{display:none}
 #pane header .hcalls button{width:42px;height:42px}
 #pane header .hcalls button:active{background:var(--fill)}
@@ -365,7 +362,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 #chatMenu{top:calc(100% - 6px);right:8px}
 #pane header #chatMenuBtn{width:42px;height:42px;flex:none;display:grid;place-items:center;color:var(--accent);border-radius:50%}
 #pane header #chatMenuBtn:active{background:var(--fill)}
-#pane header .hcalls{margin-left:auto}
+#pane header .hcalls{margin-left:0}
 #blockBar{display:flex;align-items:center;gap:12px;padding:12px 16px;padding-bottom:max(12px,env(safe-area-inset-bottom));background:var(--panel);border-top:1px solid var(--sep)}
 #blockBar p{flex:1;font-size:14px;line-height:1.45;color:var(--muted)}
 #blockBar button{flex:none;background:var(--accent);color:#fff;font-weight:600;padding:10px 16px;border-radius:12px}
@@ -421,3 +418,16 @@ input,textarea{-webkit-user-select:text;user-select:text}
 .callrow .callagain svg{width:20px;height:20px}
 .callrow .callagain .ico{vertical-align:0}
 #offlineBar{background:var(--fill);color:var(--muted);font-size:13px;text-align:center;padding:6px 12px;border-bottom:1px solid var(--sep)}
+#pane>header .who{flex:1}
+#pane>header #chatMenuBtn{margin-left:auto}
+.callev{align-self:center;display:flex;align-items:center;gap:8px;max-width:90%;margin:8px 0;padding:6px 14px;border-radius:999px;background:var(--panel);color:var(--muted);font-size:13px;box-shadow:0 1px 1px rgba(0,0,0,.15);cursor:pointer;-webkit-user-select:none;user-select:none}
+.callev svg{width:16px;height:16px;flex:none;color:var(--accent)}
+.callev time{font-size:11px;opacity:.75;flex:none}
+.callev.bad,.callev.bad svg{color:var(--danger)}
+.callev:active{background:var(--fill)}
+.msg.hasreact{margin-bottom:16px}
+.reacts{position:absolute;bottom:-14px;display:flex;align-items:center;gap:3px;padding:1px 7px;border-radius:12px;background:var(--panel);border:1px solid var(--sep);box-shadow:0 1px 3px rgba(0,0,0,.25);font-size:13px;line-height:1.4;white-space:nowrap;z-index:1}
+.reacts small{font-size:11px;color:var(--muted)}
+.reacts.own{border-color:var(--accent)}
+.msg.mine .reacts{right:10px}
+.msg.theirs .reacts{left:10px}
