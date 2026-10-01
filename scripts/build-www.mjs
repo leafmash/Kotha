@@ -5,6 +5,9 @@ const OUT_DIR = "www";
 
 const ITEMS = [
   "index.html",
+  "privacy.html",
+  "terms.html",
+  "delete-account.html",
   "css",
   "js",
   "manifest.json",
