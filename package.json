@@ -1,8 +1,8 @@
 {
-  "name": "kotha",
+  "name": "cova",
   "private": true,
   "version": "1.0.0",
-  "description": "কথা — Bengali chat and calling app",
+  "description": "Cova — Bengali chat and calling app",
   "scripts": {
     "build:www": "node scripts/build-www.mjs",
     "resources": "python3 scripts/make-resources.py",

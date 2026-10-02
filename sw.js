@@ -1,4 +1,4 @@
-const CACHE = "kotha-v30";
+const CACHE = "cova-v39";
 const SHELL = ["./", "index.html", "css/style.css", "js/app.js", "js/call.js", "js/i18n.js", "js/push-trigger.js", "icon.svg", "icon-192.png"];
 
 self.addEventListener("install", e => {
@@ -40,8 +40,8 @@ self.addEventListener("push", e => {
       if (list.some(c => c.visibilityState === "visible" && c.focused)) return;
       const isCall = d.type === "call";
       const quiet = !isCall && d.muted === "1";
-      const tag = isCall ? "call-" + (d.chatId || "") : d.chatId || "kotha";
-      return self.registration.showNotification(d.title || "কথা", {
+      const tag = isCall ? "call-" + (d.chatId || "") : d.chatId || "cova";
+      return self.registration.showNotification(d.title || "Cova", {
         body: d.body || "",
         icon: "icon-192.png",
         badge: "icon-192.png",

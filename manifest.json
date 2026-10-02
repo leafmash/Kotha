@@ -1,7 +1,7 @@
 {
   "id": "./index.html",
-  "name": "কথা",
-  "short_name": "কথা",
+  "name": "Cova",
+  "short_name": "Cova",
   "lang": "en",
   "start_url": "./index.html",
   "scope": "./",

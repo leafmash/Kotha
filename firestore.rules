@@ -102,6 +102,31 @@ service cloud.firestore {
             || (o.members.hasAll(n.members)
               && (!('admin' in o) || o.admin in n.members))));
     }
+    function ownDelete() {
+      let o = resource.data;
+      let n = request.resource.data;
+      return o.from == request.auth.uid
+        && n.diff(o).affectedKeys().hasOnly(['deleted', 'text', 'url'])
+        && n.deleted == true
+        && n.text == ''
+        && n.get('url', '') == '';
+    }
+    function ownEdit() {
+      let o = resource.data;
+      let n = request.resource.data;
+      return o.from == request.auth.uid
+        && o.get('type', 'text') == 'text'
+        && o.get('deleted', false) != true
+        && !('callLog' in o)
+        && !('sys' in o)
+        && n.diff(o).affectedKeys().hasOnly(['text', 'edited', 'editedAt'])
+        && n.text is string
+        && n.text.size() > 0
+        && n.text.size() <= 5000
+        && n.edited == true
+        && n.editedAt == request.time
+        && request.time < o.at + duration.value(15, 'm');
+    }
     match /users/{userId} {
       allow get: if signedIn();
       allow list: if false;
@@ -139,11 +164,13 @@ service cloud.firestore {
       allow list: if false;
       allow create: if signedIn()
         && request.auth.token.email != null
+        && request.auth.token.email_verified == true
         && request.auth.token.email.lower() == email
         && request.resource.data.keys().hasOnly(['uid'])
         && request.resource.data.uid == request.auth.uid;
       allow update: if signedIn()
         && request.auth.token.email != null
+        && request.auth.token.email_verified == true
         && request.auth.token.email.lower() == email
         && resource.data.uid == request.auth.uid
         && request.resource.data.uid == request.auth.uid;
@@ -202,11 +229,9 @@ service cloud.firestore {
               ? validSysLog(chatId)
               : (request.resource.data.get('type', 'text') != 'call' && request.resource.data.get('type', 'text') != 'system')));
         allow update: if isMember(chatId)
-          && (resource.data.from == request.auth.uid
-            && request.resource.data.get('callLog', null) == resource.data.get('callLog', null)
-            && request.resource.data.get('sys', null) == resource.data.get('sys', null)
-            && request.resource.data.get('type', 'text') == resource.data.get('type', 'text')
-            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reactions', 'hiddenFor']));
+          && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reactions', 'hiddenFor'])
+            || ownDelete()
+            || ownEdit());
       }
     }
   }

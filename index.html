@@ -9,28 +9,30 @@
 <link rel="icon" href="icon.svg">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
-<title>কথা</title>
+<title>Cova</title>
 <script>document.documentElement.dataset.theme=localStorage.getItem("theme")||"dark"</script>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div id="splash">
-  <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 3C6.5 3 2 6.8 2 11.5c0 2.4 1.2 4.6 3.1 6.1L4 21l3.9-1.9c1.3.5 2.7.8 4.1.8 5.5 0 10-3.8 10-8.5S17.5 3 12 3z"/></svg></div>
+  <div class="logo"><svg viewBox="162 162 700 700"><path fill-rule="evenodd" d="M512 222A290 290 0 0 1 802 512V762A40 40 0 0 1 762 802H512A290 290 0 0 1 222 512A290 290 0 0 1 512 222ZM612.2 400.1A150 150 0 1 0 612.2 615.9A32 32 0 0 0 567.7 569.9A86 86 0 1 1 567.7 446.1A32 32 0 0 0 612.2 400.1Z"/></svg></div>
   <div class="spin"></div>
 </div>
 <section id="auth">
   <div class="auth-card">
-    <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 3C6.5 3 2 6.8 2 11.5c0 2.4 1.2 4.6 3.1 6.1L4 21l3.9-1.9c1.3.5 2.7.8 4.1.8 5.5 0 10-3.8 10-8.5S17.5 3 12 3z"/></svg></div>
-    <h1 class="brand">কথা</h1>
+    <div class="logo"><svg viewBox="162 162 700 700"><path fill-rule="evenodd" d="M512 222A290 290 0 0 1 802 512V762A40 40 0 0 1 762 802H512A290 290 0 0 1 222 512A290 290 0 0 1 512 222ZM612.2 400.1A150 150 0 1 0 612.2 615.9A32 32 0 0 0 567.7 569.9A86 86 0 1 1 567.7 446.1A32 32 0 0 0 612.2 400.1Z"/></svg></div>
+    <h1 class="brand">Cova</h1>
     <p class="tag" data-i18n="auth.tag">Sign in with your email to start chatting.</p>
     <form id="authForm">
       <input id="name" placeholder="Your name" data-i18n-placeholder="auth.name" autocomplete="name" hidden>
       <input id="email" type="email" placeholder="Email" data-i18n-placeholder="auth.email" autocomplete="email" required>
       <input id="password" type="password" placeholder="Password" data-i18n-placeholder="auth.password" minlength="6" autocomplete="current-password" required>
+      <a href="#" class="forgot" id="forgotLink" data-i18n="auth.forgot">Forgot password?</a>
       <button class="primary" id="authBtn">Sign in</button>
     </form>
     <button class="ghost" id="googleBtn" data-i18n="auth.google">Continue with Google</button>
     <p class="switch"><span id="switchText">New here?</span> <a href="#" id="switchLink">Create account</a></p>
+    <p class="info" id="authInfo" role="status"></p>
     <p class="err" id="authErr"></p>
     <p class="legalnote"><span data-i18n="auth.legalPrefix">By continuing you agree to our</span> <a data-legal="terms" target="_blank" rel="noopener" data-i18n="legal.terms">Terms of Use</a> <span data-i18n="auth.legalAnd">and</span> <a data-legal="privacy" target="_blank" rel="noopener" data-i18n="legal.privacy">Privacy Policy</a><span data-i18n="auth.legalSuffix">.</span></p>
     <p class="switch"><a href="#" id="langLink">বাংলা</a></p>
@@ -47,19 +49,22 @@
       <button class="rbtn" data-f="calls" title="Calls" data-i18n-title="common.calls"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></button>
     </div>
     <div class="rail-bottom">
-      <button class="rprofile" id="railMe" title="Change photo" data-i18n-title="common.changePhoto"><img id="railImg" alt=""></button>
+      <button class="rprofile" id="railMe" title="Profile" data-i18n-title="menu.profile"><img id="railImg" alt=""></button>
     </div>
   </nav>
   <aside id="sidebar">
     <header>
-      <b class="dtitle">Chats</b>
-      <div class="me" id="meBtn" title="Change photo" data-i18n-title="common.changePhoto"><img id="meImg" alt=""><b id="meName"></b></div>
+      <div class="appbrand"><span class="blogo"><svg viewBox="162 162 700 700"><path fill-rule="evenodd" d="M512 222A290 290 0 0 1 802 512V762A40 40 0 0 1 762 802H512A290 290 0 0 1 222 512A290 290 0 0 1 512 222ZM612.2 400.1A150 150 0 1 0 612.2 615.9A32 32 0 0 0 567.7 569.9A86 86 0 1 1 567.7 446.1A32 32 0 0 0 612.2 400.1Z"/></svg></span><b>Cova</b></div>
       <div class="actions">
         <button id="addBtn" title="Add contact" data-i18n-title="common.addContact"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/></svg></button>
         <button id="menuBtn" title="More" data-i18n-title="common.more" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24"><circle class="fill" cx="12" cy="5" r="1.8"/><circle class="fill" cx="12" cy="12" r="1.8"/><circle class="fill" cx="12" cy="19" r="1.8"/></svg></button>
       </div>
       <div id="moreMenu" hidden role="menu"></div>
     </header>
+    <div id="verifyBar" hidden>
+      <div class="vtext"><b data-i18n="verify.title">Verify your email</b><small id="verifyText"></small></div>
+      <div class="vbtns"><button id="verifyResend" data-i18n="verify.resend">Resend</button><button id="verifyCheck" data-i18n="verify.done">I've verified</button></div>
+    </div>
     <div class="search"><input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="Search conversations" data-i18n-placeholder="list.search"></div>
     <div class="chips" id="chips"><button data-f="all" class="on" data-i18n="common.all">All</button><button data-f="unread" data-i18n="common.unread">Unread</button></div>
     <div id="list"></div>
@@ -72,8 +77,8 @@
 
   <section id="chat">
     <div id="empty">
-      <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 3C6.5 3 2 6.8 2 11.5c0 2.4 1.2 4.6 3.1 6.1L4 21l3.9-1.9c1.3.5 2.7.8 4.1.8 5.5 0 10-3.8 10-8.5S17.5 3 12 3z"/></svg></div>
-      <h2>কথা</h2>
+      <div class="logo"><svg viewBox="162 162 700 700"><path fill-rule="evenodd" d="M512 222A290 290 0 0 1 802 512V762A40 40 0 0 1 762 802H512A290 290 0 0 1 222 512A290 290 0 0 1 512 222ZM612.2 400.1A150 150 0 1 0 612.2 615.9A32 32 0 0 0 567.7 569.9A86 86 0 1 1 567.7 446.1A32 32 0 0 0 612.2 400.1Z"/></svg></div>
+      <h2>Cova</h2>
       <p data-i18n="list.pick">Pick a chat from the list on the left</p>
     </div>
     <div id="pane" hidden>
@@ -170,13 +175,63 @@
       <div class="ht"><b data-i18n="settings.title">Settings</b></div>
     </header>
     <div class="gbody">
-      <div class="glabel" data-i18n="settings.blocked">Blocked users</div>
-      <div id="blockedList"></div>
+      <button class="sme" id="settingsMe">
+        <img id="settingsImg" alt="">
+        <span class="stext"><b id="settingsName"></b><small id="settingsEmail"></small></span>
+        <span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+      </button>
+
+      <div class="glabel" data-i18n="settings.preferences">Preferences</div>
+      <div class="scard">
+        <button class="srow" id="langRow"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.7 3.9 5.7 3.9 9s-1.3 6.3-3.9 9c-2.6-2.7-3.9-5.7-3.9-9S9.4 5.7 12 3z"/></svg></span><span class="stext" data-i18n="settings.language">Language</span><span class="sval" id="langValue"></span><span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button>
+        <button class="srow" id="blockedRow"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><span class="stext" id="blockedLabel"></span><span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button>
+      </div>
+
       <div class="glabel" data-i18n="settings.about">About</div>
-      <a class="srow" data-legal="privacy" target="_blank" rel="noopener"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/></svg></span><span data-i18n="legal.privacy">Privacy Policy</span></a>
-      <a class="srow" data-legal="terms" target="_blank" rel="noopener"><span class="ico"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6"/></svg></span><span data-i18n="legal.terms">Terms of Use</span></a>
+      <div class="scard">
+        <a class="srow" data-legal="privacy" target="_blank" rel="noopener"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/></svg></span><span class="stext" data-i18n="legal.privacy">Privacy Policy</span><span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></a>
+        <a class="srow" data-legal="terms" target="_blank" rel="noopener"><span class="ico"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6"/></svg></span><span class="stext" data-i18n="legal.terms">Terms of Use</span><span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></a>
+      </div>
+
       <div class="glabel" data-i18n="settings.account">Account</div>
-      <button class="srow danger" id="deleteAccountBtn"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3"/></svg></span><span data-i18n="settings.deleteAccount">Delete account</span></button>
+      <div class="scard">
+        <button class="srow danger" id="signOutBtn"><span class="ico"><svg viewBox="0 0 24 24"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/></svg></span><span class="stext" data-i18n="menu.signOut">Sign out</span></button>
+        <button class="srow danger" id="deleteAccountBtn"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3"/></svg></span><span class="stext" data-i18n="settings.deleteAccount">Delete account</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="blockedSheet" hidden>
+  <div class="panel">
+    <header>
+      <button id="blockedClose" title="Back" data-i18n-title="common.back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="ht"><b data-i18n="settings.blocked">Blocked users</b><small id="blockedCount"></small></div>
+    </header>
+    <div class="gbody">
+      <div class="scard sgap" id="blockedList"></div>
+    </div>
+  </div>
+</div>
+<div id="profileSheet" hidden>
+  <div class="panel">
+    <header>
+      <button id="profileClose" title="Back" data-i18n-title="common.back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="ht"><b data-i18n="profile.title">Profile</b></div>
+    </header>
+    <div class="gbody">
+      <div class="ptop">
+        <button class="pavatar" id="profileAvatar" title="Set profile photo" data-i18n-title="profile.setPhoto">
+          <img id="profileImg" alt="">
+          <span class="gcam"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span>
+        </button>
+        <b id="profileName"></b>
+        <small data-i18n="chat.online">Online</small>
+      </div>
+      <div class="scard">
+        <button class="srow" id="profileSetPhoto"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span><span class="stext" data-i18n="profile.setPhoto">Set profile photo</span></button>
+      </div>
+      <div class="glabel" data-i18n="profile.info">Info</div>
+      <div class="scard" id="profileInfo"></div>
     </div>
   </div>
 </div>
@@ -222,7 +277,7 @@
   <div class="dialog">
     <div class="dicon" id="termsIcon"></div>
     <h3 id="termsTitle" data-i18n="terms.gateTitle">Terms and Privacy</h3>
-    <p data-i18n="terms.gateText">Please review and accept our Terms of Use and Privacy Policy to continue. Kotha has zero tolerance for abusive or objectionable content.</p>
+    <p data-i18n="terms.gateText">Please review and accept our Terms of Use and Privacy Policy to continue. Cova has zero tolerance for abusive or objectionable content.</p>
     <p class="dlinks"><a data-legal="terms" target="_blank" rel="noopener" data-i18n="legal.terms">Terms of Use</a> · <a data-legal="privacy" target="_blank" rel="noopener" data-i18n="legal.privacy">Privacy Policy</a></p>
     <div class="dbtns">
       <button class="dcancel" id="termsDecline" data-i18n="signout.ok">Sign out</button>
@@ -268,6 +323,22 @@
       </div>
       <p class="fhint" data-i18n="find.hint">Enter the full email address of the person you want to add. People cannot be found by name.</p>
       <div id="findResult"></div>
+    </div>
+  </div>
+</div>
+<div id="forwardSheet" hidden>
+  <div class="panel">
+    <header>
+      <button id="forwardClose" title="Back" data-i18n-title="common.back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="ht"><b data-i18n="fwd.title">Forward to</b><small id="forwardCount"></small></div>
+      <button id="forwardSend" class="off" data-i18n="fwd.send">Send</button>
+    </header>
+    <div class="gbody">
+      <div class="gsearch">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="forwardFind" type="search" autocomplete="off" spellcheck="false" placeholder="Search chats" data-i18n-placeholder="fwd.search">
+      </div>
+      <div id="forwardList"></div>
     </div>
   </div>
 </div>
