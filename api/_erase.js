@@ -63,6 +63,7 @@ const deleteRefs = async (db, refs) => {
 
 const collectUrls = (snap, into) => {
   snap.forEach(doc => {
+    if (doc.get("forwarded") === true) return;
     const url = doc.get("url");
     if (typeof url === "string" && url) into.add(url);
   });
@@ -79,11 +80,11 @@ const eraseUser = async ({ db, auth, FieldValue, uid, email, cloudinary, fetchIm
     const chat = chatDoc.data();
     const messages = chatDoc.ref.collection("messages");
     if (chat.group !== true) {
-      collectUrls(await messages.select("url").get(), media);
+      collectUrls(await messages.select("url", "forwarded").get(), media);
       await db.recursiveDelete(chatDoc.ref);
       continue;
     }
-    const mine = await messages.where("from", "==", uid).select("url").get();
+    const mine = await messages.where("from", "==", uid).select("url", "forwarded").get();
     collectUrls(mine, media);
     await deleteRefs(db, mine.docs.map(d => d.ref));
     const remaining = (chat.members || []).filter(m => m !== uid);
