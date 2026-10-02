@@ -9,7 +9,7 @@ url = os.environ.get("APP_URL", "").strip().rstrip("/")
 parsed = urlparse(url)
 
 if parsed.scheme != "https" or not parsed.netloc or parsed.path not in ("", "/"):
-    print("APP_URL must be a bare https address such as https://kotha.vercel.app", file=sys.stderr)
+    print("APP_URL must be a bare https address such as https://cova.vercel.app", file=sys.stderr)
     sys.exit(1)
 
 with open(path, "r", encoding="utf-8") as f:
