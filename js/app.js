@@ -1,10 +1,10 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserPopupRedirectResolver, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithCredential, GoogleAuthProvider, EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserPopupRedirectResolver, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithCredential, GoogleAuthProvider, EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup, signOut, updateProfile, sendPasswordResetEmail, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getMessaging, getToken, isSupported } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
 import { createCalls } from "./call.js";
 import { createPushTrigger } from "./push-trigger.js";
-import { t, getLang, locale, fmtNumber, stored, displayStored, applyStatic, onLangChange, toggleLang } from "./i18n.js";
-import { isNative, API_BASE, TERMS_VERSION } from "./config.js";
+import { t, getLang, locale, fmtNumber, stored, displayStored, applyStatic, onLangChange, toggleLang, setLang } from "./i18n.js";
+import { isNative, API_BASE, TERMS_VERSION, EDIT_WINDOW_MS, EDIT_MAX, FORWARD_MAX } from "./config.js";
 import { setupNative, hideNativeSplash, applyStatusBar, setActiveChat, syncNativeSession, nativeGoogleIdToken, registerNativePush, initBatteryPrompt, consumePendingChat, setBadgeCount } from "./native.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, query, orderBy, where, limit, serverTimestamp, arrayUnion, arrayRemove, increment, writeBatch, deleteField, deleteDoc, terminate, clearIndexedDbPersistence, waitForPendingWrites } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -78,14 +78,14 @@ const callLogText = log => {
 };
 const callEventKind = (log, mine) => (!mine && log.kind === "cancelled" ? "missed" : log.kind);
 const callEventParts = (log, mine) => {
-  const label = t(log.video ? "call.video" : "call.voice");
+  const label = t(log.video ? "call.shortVideo" : "call.shortVoice");
   const secs = Number(log.secs) || 0;
   const kind = callEventKind(log, mine);
-  if (kind === "done") return { title: label, sub: secs ? Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0") : "" };
-  if (kind === "declined") return { title: t("call.logDeclined", { label }), sub: "" };
-  if (kind === "cancelled") return { title: t("call.logCancelled", { label }), sub: "" };
-  if (mine) return { title: label, sub: t("call.noAnswer") };
-  return { title: t("call.logMissed", { label }), sub: "" };
+  if (kind === "done") return { title: t(mine ? "call.evOutgoing" : "call.evIncoming", { label }), sub: secs ? Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0") : "" };
+  if (kind === "declined") return { title: t("call.evDeclined", { label }), sub: "" };
+  if (kind === "cancelled") return { title: t("call.evCancelled", { label }), sub: "" };
+  if (mine) return { title: t("call.evOutgoing", { label }), sub: t("call.noAnswer") };
+  return { title: t("call.evMissed", { label }), sub: "" };
 };
 const lastText = value => displayStored(value);
 
@@ -106,6 +106,7 @@ const icons = {
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   camera: '<path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>',
   flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   sliders: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
   shield: '<path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6l8-3z"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
@@ -114,7 +115,9 @@ const icons = {
   arrowIn: '<path d="M17 7L7 17M7 9v8h8"/>',
   arrowOut: '<path d="M7 17L17 7M9 7h8v8"/>',
   phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
-  video: '<rect x="3" y="6" width="12" height="12" rx="2.5"/><path d="M15 10.5l6-3.5v10l-6-3.5"/>'
+  video: '<rect x="3" y="6" width="12" height="12" rx="2.5"/><path d="M15 10.5l6-3.5v10l-6-3.5"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>',
+  forward: '<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0-6 6v3"/>'
 };
 const icon = (name, cls) => {
   const s = el("span", "ico" + (cls ? " " + cls : ""));
@@ -182,6 +185,7 @@ addEventListener("keydown", e => {
   closeMenu();
   closeMore();
   closeChatMenu();
+  closeForward();
 });
 
 let toastTimer;
@@ -210,7 +214,12 @@ const OUTBOX = "kotha-outbox";
 let flushing = false;
 const FOREVER = 4102444800000;
 const isMuted = id => (Number(muted[id]) || 0) > Date.now();
+const setInfo = (text, bad) => {
+  $("authInfo").textContent = text;
+  $("authInfo").classList.toggle("bad", !!bad);
+};
 const renderAuthTexts = () => {
+  $("forgotLink").hidden = signup;
   $("authBtn").textContent = t(signup ? "auth.signUp" : "auth.signIn");
   $("switchText").textContent = t(signup ? "auth.haveAccount" : "auth.newHere");
   $("switchLink").textContent = t(signup ? "auth.signIn" : "auth.signUp");
@@ -271,11 +280,9 @@ function openMore() {
   const dark = document.documentElement.dataset.theme === "dark";
   const items = [
     { icon: "users", label: t("menu.newGroup"), fn: () => openGroupSheet() },
-    { icon: "camera", label: t("menu.changeProfilePhoto"), fn: () => $("avatarInput").click() },
+    { icon: "user", label: t("menu.profile"), fn: () => openProfile() },
     { icon: dark ? "sun" : "moon", label: dark ? t("menu.lightMode") : t("menu.darkMode"), fn: toggleTheme },
-    { icon: "globe", label: getLang() === "en" ? "বাংলা" : "English", fn: toggleLang },
-    { icon: "sliders", label: t("menu.settings"), fn: () => openSettings() },
-    { icon: "logout", label: t("menu.signOut"), fn: () => logout(), danger: true }
+    { icon: "sliders", label: t("menu.settings"), fn: () => openSettings() }
   ];
   moreMenu.replaceChildren(...items.map(it => {
     const b = el("button", "mi" + (it.danger ? " danger" : ""));
@@ -314,8 +321,11 @@ onLangChange(() => {
     if (!$("findSheet").hidden) renderFind();
     if (!moreMenu.hidden) openMore();
     if (!chatMenu.hidden) openChatMenu();
-    if (!$("settingsSheet").hidden) renderBlockedList();
+    renderBlockedList();
+    renderProfile();
     if (!$("reportBox").hidden) renderReasons();
+    if (!$("forwardSheet").hidden) renderForward();
+    syncVerifyBar();
   }
   setLegalLinks();
 });
@@ -326,12 +336,14 @@ $("switchLink").onclick = e => {
   e.preventDefault();
   signup = !signup;
   $("name").hidden = !signup;
+  setInfo("");
   renderAuthTexts();
 };
 
 $("authForm").onsubmit = async e => {
   e.preventDefault();
   $("authErr").textContent = "";
+  setInfo("");
   const btn = $("authBtn");
   const label = btn.textContent;
   btn.disabled = true;
@@ -343,6 +355,8 @@ $("authForm").onsubmit = async e => {
       pendingName = $("name").value.trim() || email.split("@")[0];
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(cred.user, { displayName: pendingName });
+      auth.languageCode = getLang();
+      sendEmailVerification(cred.user).catch(() => {});
     } else {
       await signInWithEmailAndPassword(auth, email, password);
     }
@@ -353,7 +367,31 @@ $("authForm").onsubmit = async e => {
   }
 };
 
+$("forgotLink").onclick = async e => {
+  e.preventDefault();
+  $("authErr").textContent = "";
+  setInfo("");
+  const email = $("email").value.trim();
+  if (!emailRe.test(email)) {
+    setInfo(t("auth.resetNeedEmail"), true);
+    $("email").focus();
+    return;
+  }
+  const link = $("forgotLink");
+  link.style.pointerEvents = "none";
+  auth.languageCode = getLang();
+  try {
+    await sendPasswordResetEmail(auth, email);
+    setInfo(t("auth.resetSent"));
+  } catch (err) {
+    const key = err?.code === "auth/too-many-requests" ? "auth.resetBusy" : err?.code === "auth/invalid-email" ? "auth.resetNeedEmail" : "auth.resetFail";
+    setInfo(t(key), true);
+  }
+  link.style.pointerEvents = "";
+};
+
 $("googleBtn").onclick = async () => {
+  setInfo("");
   try {
     if (isNative) {
       const idToken = await nativeGoogleIdToken();
@@ -395,6 +433,68 @@ function markRead(force = false) {
 }
 addEventListener("beforeunload", () => setPresence(false));
 
+const isPasswordUser = u => (u?.providerData || []).some(p => p.providerId === "password");
+
+const registerLookup = async user => {
+  const mail = (user.email || "").toLowerCase();
+  if (!mail || !user.emailVerified) return;
+  const lref = doc(db, "emailLookup", mail);
+  const lsnap = await getDoc(lref);
+  if (!lsnap.exists() || lsnap.data().uid !== user.uid) await setDoc(lref, { uid: user.uid });
+};
+
+const syncVerifyBar = () => {
+  const u = auth.currentUser;
+  const show = !!u && isPasswordUser(u) && !u.emailVerified;
+  $("verifyBar").hidden = !show;
+  if (show) $("verifyText").textContent = t("verify.text", { email: u.email || "" });
+};
+
+async function refreshVerified(announce) {
+  const u = auth.currentUser;
+  if (!u || u.emailVerified) return;
+  try {
+    await u.reload();
+  } catch (err) {
+    if (announce) toast(t("verify.fail"));
+    return;
+  }
+  const fresh = auth.currentUser;
+  if (!fresh?.emailVerified) {
+    if (announce) toast(t("verify.notYet"));
+    return;
+  }
+  try {
+    await fresh.getIdToken(true);
+    await registerLookup(fresh);
+  } catch (err) {
+    toast(t("verify.fail"));
+  }
+  syncVerifyBar();
+  toast(t("verify.verified"));
+}
+
+$("verifyResend").onclick = async () => {
+  const u = auth.currentUser;
+  if (!u) return;
+  const btn = $("verifyResend");
+  btn.disabled = true;
+  auth.languageCode = getLang();
+  try {
+    await sendEmailVerification(u);
+    toast(t("verify.sent"));
+  } catch (err) {
+    toast(t(err?.code === "auth/too-many-requests" ? "verify.busy" : "verify.fail"));
+  }
+  setTimeout(() => { btn.disabled = false; }, 60000);
+};
+
+$("verifyCheck").onclick = () => refreshVerified(true);
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && !$("verifyBar").hidden) refreshVerified(false);
+});
+
 onAuthStateChanged(auth, async user => {
   unsubs.forEach(u => u());
   unsubs = [];
@@ -413,6 +513,10 @@ onAuthStateChanged(auth, async user => {
     deliverKeys.clear();
     $("termsGate").hidden = true;
     $("settingsSheet").hidden = true;
+    $("blockedSheet").hidden = true;
+    $("profileSheet").hidden = true;
+    $("forwardSheet").hidden = true;
+    $("verifyBar").hidden = true;
     closeMore();
     closeChat();
     $("app").hidden = true;
@@ -443,17 +547,14 @@ onAuthStateChanged(auth, async user => {
       await updateDoc(ref, { email: deleteField() });
     }
     if (!snap.exists() || snap.data().lang !== getLang()) await setDoc(ref, { lang: getLang() }, { merge: true });
-    const mail = (user.email || "").toLowerCase();
-    if (mail) {
-      const lref = doc(db, "emailLookup", mail);
-      const lsnap = await getDoc(lref);
-      if (!lsnap.exists() || lsnap.data().uid !== user.uid) await setDoc(lref, { uid: user.uid });
-    }
+    await registerLookup(user);
   } catch (err) {
     hideSplash();
     toast(t("list.loadFail"));
   }
   $("app").hidden = false;
+  syncVerifyBar();
+  refreshVerified(false);
   if (needTerms) showTermsGate();
   registerPush(true);
   initBatteryPrompt();
@@ -617,12 +718,69 @@ async function runSearch(term) {
 
 function renderMe() {
   const me = users.get(auth.currentUser.uid);
-  $("meImg").src = pic(me);
   $("railImg").src = pic(me);
-  $("meName").textContent = me?.name || "";
+  renderProfile();
 }
 
-$("meBtn").onclick = () => $("avatarInput").click();
+function infoRow(value, label) {
+  const r = el("div", "irow");
+  r.append(el("b", "", value), el("small", "", label));
+  return r;
+}
+
+function renderProfile() {
+  const user = auth.currentUser;
+  if (!user) return;
+  const me = users.get(user.uid);
+  const name = me?.name || user.displayName || t("common.user");
+  const photo = pic(me || { name });
+  $("profileImg").src = photo;
+  $("profileName").textContent = name;
+  $("settingsImg").src = photo;
+  $("settingsName").textContent = name;
+  $("settingsEmail").textContent = user.email || "";
+  $("langValue").textContent = getLang() === "en" ? "English" : "বাংলা";
+  const rows = [infoRow(name, t("profile.name"))];
+  if (user.email) {
+    rows.push(infoRow(user.email, t("profile.email")));
+    rows.push(infoRow(t(user.emailVerified ? "profile.verified" : "profile.notVerified"), t("profile.emailStatus")));
+  }
+  const methods = (user.providerData || []).map(p => p.providerId === "password" ? t("profile.methodPassword") : p.providerId === "google.com" ? "Google" : p.providerId);
+  if (methods.length) rows.push(infoRow(methods.join(" · "), t("profile.method")));
+  const created = user.metadata?.creationTime ? new Date(user.metadata.creationTime) : null;
+  if (created && !isNaN(created)) rows.push(infoRow(created.toLocaleDateString(locale(), { year: "numeric", month: "long", day: "numeric" }), t("profile.joined")));
+  $("profileInfo").replaceChildren(...rows);
+}
+
+function openProfile() {
+  renderProfile();
+  $("profileSheet").hidden = false;
+  $("profileSheet").querySelector(".gbody").scrollTop = 0;
+}
+
+function closeProfile() {
+  $("profileSheet").hidden = true;
+}
+
+$("profileClose").onclick = closeProfile;
+$("profileAvatar").onclick = () => $("avatarInput").click();
+$("profileSetPhoto").onclick = () => $("avatarInput").click();
+$("settingsMe").onclick = () => openProfile();
+$("signOutBtn").onclick = () => logout();
+$("langRow").onclick = async () => {
+  const cur = getLang();
+  const pick = await askChoice({
+    title: t("settings.language"),
+    text: t("settings.languageText"),
+    iconName: "globe",
+    options: [
+      { label: (cur === "en" ? "✓  " : "") + "English", value: "en", kind: "dnorm" },
+      { label: (cur === "bn" ? "✓  " : "") + "বাংলা", value: "bn", kind: "dnorm" },
+      { label: t("common.cancel"), value: null, kind: "dcancel" }
+    ]
+  });
+  if (pick && pick !== getLang()) setLang(pick);
+};
 $("avatarInput").onchange = async e => {
   const file = e.target.files[0];
   e.target.value = "";
@@ -670,7 +828,7 @@ function renderList() {
   const hit = name => !term || (name || "").toLowerCase().includes(term);
   const totalUnread = chats.reduce((n, c) => n + (isMuted(c.id) || (!c.group && blocked.has(peerIdOf(c, uid))) ? 0 : unreadOf(c, uid)), 0);
   setBadgeCount(totalUnread);
-  document.title = (totalUnread ? `(${totalUnread}) ` : "") + "কথা";
+  document.title = (totalUnread ? `(${totalUnread}) ` : "") + "Cova";
   $("railBadge").hidden = !totalUnread;
   $("railBadge").textContent = totalUnread > 99 ? "99+" : totalUnread;
   $("tabBadge").hidden = !totalUnread;
@@ -742,7 +900,6 @@ function syncFilterUi() {
   document.querySelectorAll("#rail [data-f]").forEach(x => x.classList.toggle("on", x.dataset.f === filter));
   document.querySelectorAll("#tabs [data-f]").forEach(x => x.classList.toggle("on", x.dataset.f === (filter === "group" || filter === "calls" ? filter : "all")));
   $("chips").hidden = filter === "group" || filter === "calls";
-  document.querySelector(".dtitle").textContent = filter === "group" ? t("common.groups") : filter === "calls" ? t("common.calls") : t("common.chats");
   if (filter === "calls") watchCallHistory();
 }
 
@@ -845,7 +1002,7 @@ document.querySelectorAll("#rail [data-f]").forEach(b => {
     renderList();
   };
 });
-$("railMe").onclick = () => $("avatarInput").click();
+$("railMe").onclick = () => openProfile();
 
 function closeChat() {
   if (active) drafts.set(active.id, input.value);
@@ -1036,9 +1193,10 @@ function renderMessages(all) {
       const cic = el("span", "cic");
       cic.append(icon(log.video ? "video" : "phone"));
       const cbody = el("span", "cbody");
-      cbody.append(el("b", "", parts.title));
-      if (parts.sub) cbody.append(el("small", "", parts.sub));
-      ev.append(cic, cbody, el("time", "", clock(m.at)));
+      const cmeta = el("span", "cmeta");
+      cmeta.append(icon(mine ? "arrowOut" : "arrowIn", "dir"), el("span", "", clock(m.at) + (parts.sub ? " · " + parts.sub : "")));
+      cbody.append(el("b", "", parts.title), cmeta);
+      ev.append(cbody, cic);
       ev.onclick = () => {
         if (!active || active.group || $("hcalls").hidden) return;
         calls.startCall(!!log.video, active);
@@ -1074,6 +1232,11 @@ function renderMessages(all) {
       b.append(q);
     }
 
+    if (m.forwarded && !m.deleted) {
+      const f = el("div", "fwd");
+      f.append(icon("forward"), " " + t("msg.forwarded"));
+      b.append(f);
+    }
     if (m.deleted) {
       const gone = el("em", "gone");
       gone.append(icon("ban"), " " + t("chat.deleted"));
@@ -1118,6 +1281,7 @@ function renderMessages(all) {
       b.classList.add("hasreact");
     }
     const meta = el("div", "meta");
+    if (m.edited && !m.deleted) meta.append(el("span", "edited", t("msg.edited")));
     meta.append(el("span", "", clock(m.at)));
     if (mine && !m.deleted) {
       const seen = m.status === "seen";
@@ -1202,6 +1366,132 @@ async function copyText(text) {
   toast(t("chat.copied"));
 }
 
+const isPlain = m => !m.deleted && !m.callLog && !m.sys && m.type !== "system" && m.type !== "call";
+const isTextMsg = m => m.type === "text" || !m.type;
+const canForward = m => isPlain(m) && (isTextMsg(m) ? !!m.text : !!m.url);
+const editLeft = m => {
+  const at = m.at?.toDate?.();
+  return at ? EDIT_WINDOW_MS - (Date.now() - at.getTime()) : 0;
+};
+const canEdit = m => isPlain(m) && isTextMsg(m) && typeof m.text === "string" && m.text.length <= EDIT_MAX && editLeft(m) > 0;
+
+async function editMessage(d, m) {
+  const minutes = fmtNumber(EDIT_WINDOW_MS / 60000);
+  if (editLeft(m) <= 0) {
+    toast(t("msg.editExpired", { n: minutes }));
+    return;
+  }
+  const next = await askEdit({ title: t("msg.editTitle"), value: m.text, max: EDIT_MAX, multiline: true });
+  if (!next || next === m.text) return;
+  if (editLeft(m) <= 0) {
+    toast(t("msg.editExpired", { n: minutes }));
+    return;
+  }
+  const chatId = active.id;
+  const wasLast = d.id === active.lastId;
+  try {
+    await updateDoc(d.ref, { text: next, edited: true, editedAt: serverTimestamp() });
+    if (wasLast) await setDoc(doc(db, "chats", chatId), { lastMessage: next }, { merge: true });
+  } catch (err) {
+    toast(err?.code === "permission-denied" ? t("msg.editExpired", { n: minutes }) : t("msg.editFail"));
+  }
+}
+
+const fwd = { picked: new Set(), payload: null, busy: false };
+
+const forwardPayload = m => {
+  if (isTextMsg(m)) return { type: "text", text: m.text, forwarded: true };
+  const p = { type: m.type, url: m.url, forwarded: true };
+  if (m.name) p.name = m.name;
+  if (m.size) p.size = m.size;
+  return p;
+};
+
+function forwardTargets() {
+  const uid = auth.currentUser.uid;
+  const term = $("forwardFind").value.trim().toLowerCase();
+  return [...chats]
+    .filter(c => Array.isArray(c.members) && c.members.includes(uid))
+    .sort((a, b) => (b.lastAt?.seconds || 0) - (a.lastAt?.seconds || 0))
+    .map(c => {
+      if (c.group) {
+        const locked = c.adminOnly === true && c.admin !== uid && !(c.admins || []).includes(uid);
+        return locked ? null : { id: c.id, name: c.name || "", photo: c.photo || "" };
+      }
+      const peerId = peerIdOf(c, uid);
+      const peer = users.get(peerId);
+      if (!peer || blocked.has(peerId)) return null;
+      return { id: c.id, name: peer.name || "", photo: peer.photo || "" };
+    })
+    .filter(x => x && (!term || x.name.toLowerCase().includes(term)));
+}
+
+function renderForward() {
+  const box = $("forwardList");
+  box.replaceChildren();
+  const list = forwardTargets();
+  if (!list.length) box.append(el("p", "hint", t("fwd.none")));
+  list.forEach(x => {
+    const row = el("div", "pick" + (fwd.picked.has(x.id) ? " on" : ""));
+    const img = el("img");
+    img.src = pic(x);
+    img.alt = "";
+    const tick = el("span", "tickbox");
+    tick.append(icon("check"));
+    row.append(img, el("span", "n", x.name || t("common.user")), tick);
+    row.onclick = () => {
+      if (fwd.busy) return;
+      if (fwd.picked.has(x.id)) {
+        fwd.picked.delete(x.id);
+      } else if (fwd.picked.size >= FORWARD_MAX) {
+        toast(t("fwd.max", { n: fmtNumber(FORWARD_MAX) }));
+        return;
+      } else {
+        fwd.picked.add(x.id);
+      }
+      renderForward();
+    };
+    box.append(row);
+  });
+  $("forwardCount").textContent = fwd.picked.size ? t("group.selected", { n: fmtNumber(fwd.picked.size) }) : t("fwd.pick");
+  $("forwardSend").classList.toggle("off", !fwd.picked.size || fwd.busy);
+}
+
+function openForward(m) {
+  fwd.payload = forwardPayload(m);
+  fwd.picked = new Set();
+  fwd.busy = false;
+  $("forwardFind").value = "";
+  renderForward();
+  $("forwardSheet").hidden = false;
+  $("forwardSheet").querySelector(".gbody").scrollTop = 0;
+}
+
+function closeForward() {
+  if ($("forwardSheet").hidden) return;
+  $("forwardSheet").hidden = true;
+  fwd.payload = null;
+  fwd.picked = new Set();
+  fwd.busy = false;
+}
+
+$("forwardClose").onclick = closeForward;
+$("forwardFind").oninput = renderForward;
+$("forwardSend").onclick = async () => {
+  if (fwd.busy || !fwd.picked.size || !fwd.payload) return;
+  if (!navigator.onLine) {
+    toast(t("fwd.offline"));
+    return;
+  }
+  fwd.busy = true;
+  renderForward();
+  const targets = [...fwd.picked].map(id => chats.find(c => c.id === id)).filter(Boolean);
+  const results = await Promise.allSettled(targets.map(c => send({ ...fwd.payload }, { id: c.id, members: c.members, reply: null })));
+  const failed = results.filter(r => r.status === "rejected").length;
+  closeForward();
+  toast(failed ? t("fwd.partial", { n: fmtNumber(failed) }) : t("fwd.done"));
+};
+
 function openMenu(d, m, mine) {
   const uid = auth.currentUser.uid;
   const reacts = $("menuReacts");
@@ -1236,6 +1526,8 @@ function openMenu(d, m, mine) {
     tile("reply", t("msg.reply"), () => setReply(preview(m), d.id));
     const copyable = m.type === "text" || !m.type ? m.text : m.url;
     if (copyable) tile("copy", t("msg.copy"), () => copyText(copyable));
+    if (canForward(m)) tile("forward", t("msg.forward"), () => openForward(m));
+    if (mine && !d.metadata.hasPendingWrites && canEdit(m)) tile("edit", t("msg.edit"), () => editMessage(d, m));
     tile("trash", t("msg.delete"), () => removeMessage(d), true);
     if (!mine) {
       tile("flag", t("report.message"), () => reportMessage(d, m), true);
@@ -1243,7 +1535,7 @@ function openMenu(d, m, mine) {
     }
   }
   const grid = $("menuItems");
-  grid.style.setProperty("--n", items.length);
+  grid.style.setProperty("--n", Math.min(items.length, 4));
   grid.replaceChildren(...items);
   menuBox.hidden = false;
 }
@@ -2100,7 +2392,7 @@ function refreshBlockedUi() {
     renderPeer();
     if (lastMessageDocs) renderMessages(lastMessageDocs);
   }
-  if (!$("settingsSheet").hidden) renderBlockedList();
+  renderBlockedList();
 }
 
 async function blockFlow(id) {
@@ -2316,6 +2608,8 @@ function setLegalLinks() {
 function renderBlockedList() {
   const box = $("blockedList");
   box.replaceChildren();
+  $("blockedLabel").textContent = t("settings.blockedCount", { n: fmtNumber(blocked.size) });
+  $("blockedCount").textContent = blocked.size ? fmtNumber(blocked.size) : "";
   if (!blocked.size) {
     box.append(el("p", "hint", t("settings.noBlocked")));
     return;
@@ -2345,16 +2639,51 @@ function closeSettings() {
 }
 
 $("settingsClose").onclick = closeSettings;
+function openBlocked() {
+  renderBlockedList();
+  $("blockedSheet").hidden = false;
+  $("blockedSheet").querySelector(".gbody").scrollTop = 0;
+}
+function closeBlocked() {
+  $("blockedSheet").hidden = true;
+}
+$("blockedRow").onclick = openBlocked;
+$("blockedClose").onclick = closeBlocked;
 $("deleteAccountBtn").onclick = () => openDelete();
 
 const providerIds = () => (auth.currentUser?.providerData || []).map(p => p.providerId);
 let deleteBusy = false;
 let deleteMethod = "password";
 
+let deleteLeft = 0;
+let deleteTimer;
+
+function renderDeleteOk() {
+  const locked = deleteLeft > 0;
+  $("deleteOk").disabled = deleteBusy || locked;
+  $("deleteGoogle").disabled = deleteBusy || locked;
+  const base = t(deleteMethod === "password" ? "delete.confirm" : "delete.confirmGoogle");
+  $("deleteOk").textContent = deleteBusy ? t("delete.working") : base + (locked ? " (" + fmtNumber(deleteLeft) + ")" : "");
+}
+
 function setDeleteBusy(on) {
   deleteBusy = on;
-  ["deleteOk", "deleteCancel", "deleteGoogle", "deletePassword"].forEach(id => { $(id).disabled = on; });
-  $("deleteOk").textContent = on ? t("delete.working") : t(deleteMethod === "password" ? "delete.confirm" : "delete.confirmGoogle");
+  ["deleteCancel", "deletePassword"].forEach(id => { $(id).disabled = on; });
+  renderDeleteOk();
+}
+
+function startDeleteLock() {
+  clearInterval(deleteTimer);
+  deleteLeft = 3;
+  renderDeleteOk();
+  deleteTimer = setInterval(() => {
+    deleteLeft -= 1;
+    if (deleteLeft <= 0) {
+      deleteLeft = 0;
+      clearInterval(deleteTimer);
+    }
+    renderDeleteOk();
+  }, 1000);
 }
 
 function openDelete() {
@@ -2369,12 +2698,15 @@ function openDelete() {
   $("deleteGoogle").hidden = !(showPassword && usesGoogle);
   $("deleteErr").textContent = "";
   setDeleteBusy(false);
+  startDeleteLock();
   $("deleteBox").hidden = false;
   (showPassword ? $("deletePassword") : $("deleteCancel")).focus();
 }
 
 function closeDelete() {
   if (deleteBusy) return;
+  clearInterval(deleteTimer);
+  deleteLeft = 0;
   $("deleteBox").hidden = true;
   $("deletePassword").value = "";
 }
@@ -2392,7 +2724,7 @@ async function reauthenticate(method, password) {
 }
 
 async function runDelete(method) {
-  if (deleteBusy || !auth.currentUser) return;
+  if (deleteBusy || deleteLeft > 0 || !auth.currentUser) return;
   const password = $("deletePassword").value;
   if (method === "password" && !password) {
     $("deleteErr").textContent = t("delete.needPassword");
@@ -2523,6 +2855,8 @@ document.addEventListener("keydown", e => {
   if (!$("lightbox").hidden) $("lightbox").hidden = true;
   else if (!$("deleteBox").hidden) closeDelete();
   else if (!$("reportBox").hidden) closeReport();
+  else if (!$("blockedSheet").hidden) closeBlocked();
+  else if (!$("profileSheet").hidden) closeProfile();
   else if (!$("settingsSheet").hidden) closeSettings();
   else if (!$("findSheet").hidden) closeFind();
   else if (!$("sheet").hidden) $("sheet").hidden = true;
@@ -2543,9 +2877,12 @@ const handleBack = () => {
   if (!$("choice").hidden) { closeChoice(null); return true; }
   if (!$("editBox").hidden) { closeEdit(null); return true; }
   if (!chatMenu.hidden) { closeChatMenu(); return true; }
+  if (!$("blockedSheet").hidden) { closeBlocked(); return true; }
+  if (!$("profileSheet").hidden) { closeProfile(); return true; }
   if (!$("settingsSheet").hidden) { closeSettings(); return true; }
   if (!$("msgMenu").hidden) { closeMenu(); return true; }
   if (!moreMenu.hidden) { closeMore(); return true; }
+  if (!$("forwardSheet").hidden) { closeForward(); return true; }
   if (!$("lightbox").hidden) { $("lightbox").hidden = true; return true; }
   if (!$("findSheet").hidden) { closeFind(); return true; }
   if (!$("sheet").hidden) { $("sheet").hidden = true; return true; }
