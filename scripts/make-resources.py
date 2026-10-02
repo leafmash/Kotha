@@ -3,66 +3,169 @@ import wave
 import struct
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 RES = ROOT / "resources"
 ANDROID = RES / "android"
 
-ACCENT = (91, 75, 245)
 BG_DARK = (13, 15, 28)
 WHITE = (255, 255, 255)
+BG_STOPS = [(0.0, (138, 125, 255)), (0.55, (91, 75, 245)), (1.0, (58, 44, 196))]
+C_STOPS = [(0.0, (125, 111, 255)), (1.0, (63, 49, 214))]
 
-BUBBLE_PATH = [
-    ("cubic", (256, 130), (183, 130), (124, 180), (124, 242)),
-    ("cubic", (124, 242), (124, 274), (140, 303), (165, 323)),
-    ("line", (165, 323), (151, 370)),
-    ("line", (151, 370), (203, 345)),
-    ("cubic", (203, 345), (220, 351), (237, 354), (256, 354)),
-    ("cubic", (256, 354), (329, 354), (388, 304), (388, 242)),
-    ("cubic", (388, 242), (388, 180), (329, 130), (256, 130)),
-]
-
-
-def cubic_point(p0, p1, p2, p3, t):
-    u = 1 - t
-    return (
-        u ** 3 * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t ** 3 * p3[0],
-        u ** 3 * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t ** 3 * p3[1],
-    )
+BUBBLE_ORIGIN = 222
+BUBBLE_SIZE = 580
+BUBBLE_CORNER = 40
+RING_CENTER = 508
+RING_RADIUS = 118
+RING_WIDTH = 64
+RING_GAP = 46
+SUPERSAMPLE = 4
+GRID = 128
+DESIGN_CENTER = 512
 
 
-def bubble_points():
-    points = []
-    for segment in BUBBLE_PATH:
-        if segment[0] == "line":
-            points.append(segment[2])
-            continue
-        for i in range(1, 25):
-            points.append(cubic_point(*segment[1:], i / 24))
-    return [BUBBLE_PATH[0][1]] + points
+def polar(cx, cy, radius, degrees):
+    angle = math.radians(degrees)
+    return cx + radius * math.cos(angle), cy + radius * math.sin(angle)
 
 
-def glyph(size, fill, offset=(0, 0), scale=1.0, box=512):
-    factor = 4
-    canvas = Image.new("RGBA", (size * factor, size * factor), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(canvas)
-    k = size * factor / box * scale
-    cx = size * factor / 2 + offset[0] * factor
-    cy = size * factor / 2 + offset[1] * factor
-    pts = [((px - 256) * k + cx, (py - 256) * k + cy) for px, py in bubble_points()]
-    draw.polygon(pts, fill=fill + (255,))
-    return canvas.resize((size, size), Image.LANCZOS)
+def arc_points(cx, cy, radius, start, end, steps=90):
+    return [polar(cx, cy, radius, start + (end - start) * i / steps) for i in range(steps + 1)]
 
 
-def flat(size, color):
-    return Image.new("RGBA", (size, size), color + (255,))
+def bubble_polygon():
+    r = BUBBLE_SIZE / 2
+    c = DESIGN_CENTER
+    far = BUBBLE_ORIGIN + BUBBLE_SIZE
+    corner = BUBBLE_CORNER
+    points = arc_points(c, c, r, -90, 0)
+    points += arc_points(far - corner, far - corner, corner, 0, 90, 20)
+    points += arc_points(c, c, r, 90, 270)
+    return points
 
 
-def compose(background, size, scale):
-    image = background.copy()
-    image.alpha_composite(glyph(size, WHITE, scale=scale))
+def ring_polygon():
+    outer = RING_RADIUS + RING_WIDTH / 2
+    inner = RING_RADIUS - RING_WIDTH / 2
+    sweep = 360 - 2 * RING_GAP
+    points = [polar(RING_CENTER, RING_CENTER, outer, -RING_GAP - sweep * i / 120) for i in range(121)]
+    points += [polar(RING_CENTER, RING_CENTER, inner, -RING_GAP - sweep * (120 - i) / 120) for i in range(121)]
+    return points
+
+
+def ring_caps():
+    return [polar(RING_CENTER, RING_CENTER, RING_RADIUS, -RING_GAP), polar(RING_CENTER, RING_CENTER, RING_RADIUS, RING_GAP)]
+
+
+def masks(canvas, scale):
+    big = canvas * SUPERSAMPLE
+    k = canvas / 1024 * scale * SUPERSAMPLE
+    mid = big / 2
+
+    def project(x, y):
+        return (x - DESIGN_CENTER) * k + mid, (y - DESIGN_CENTER) * k + mid
+
+    bubble = Image.new("L", (big, big), 0)
+    ImageDraw.Draw(bubble).polygon([project(x, y) for x, y in bubble_polygon()], fill=255)
+    ring = Image.new("L", (big, big), 0)
+    draw = ImageDraw.Draw(ring)
+    draw.polygon([project(x, y) for x, y in ring_polygon()], fill=255)
+    cap = RING_WIDTH / 2 * k
+    for x, y in ring_caps():
+        px, py = project(x, y)
+        draw.ellipse((px - cap, py - cap, px + cap, py + cap), fill=255)
+    bubble = bubble.resize((canvas, canvas), Image.LANCZOS)
+    ring = ring.resize((canvas, canvas), Image.LANCZOS)
+    return {"bubble": bubble, "ring": ring, "cutout": ImageChops.subtract(bubble, ring)}
+
+
+def ramp(stops, t):
+    t = max(0.0, min(1.0, t))
+    for (a, ca), (b, cb) in zip(stops, stops[1:]):
+        if t <= b:
+            f = (t - a) / (b - a)
+            return tuple(round(ca[i] + (cb[i] - ca[i]) * f) for i in range(3))
+    return stops[-1][1]
+
+
+def gradient(canvas, stops, mapper):
+    small = Image.new("RGB", (GRID, GRID))
+    pixels = small.load()
+    for j in range(GRID):
+        for i in range(GRID):
+            pixels[i, j] = ramp(stops, mapper(i / (GRID - 1), j / (GRID - 1)))
+    return small.resize((canvas, canvas), Image.BICUBIC)
+
+
+def background(canvas):
+    base = gradient(canvas, BG_STOPS, lambda u, v: (u + v) / 2)
+    glow = Image.new("L", (GRID, GRID))
+    pixels = glow.load()
+    for j in range(GRID):
+        for i in range(GRID):
+            d = math.hypot(i / (GRID - 1) - 0.25, j / (GRID - 1) - 0.15) / 0.8
+            pixels[i, j] = round(255 * 0.22 * max(0.0, 1 - d))
+    glow = glow.resize((canvas, canvas), Image.BICUBIC)
+    return Image.composite(Image.new("RGB", (canvas, canvas), WHITE), base, glow)
+
+
+def ring_fill(canvas, scale):
+    k = canvas / 1024 * scale
+    x0 = RING_CENTER - RING_RADIUS - RING_WIDTH / 2
+    span = 2 * (RING_RADIUS + RING_WIDTH / 2)
+
+    def mapper(u, v):
+        x = (u * canvas - canvas / 2) / k + DESIGN_CENTER
+        y = (v * canvas - canvas / 2) / k + DESIGN_CENTER
+        return ((x - x0) + (y - x0)) / (2 * span)
+
+    return gradient(canvas, C_STOPS, mapper)
+
+
+def glyph(canvas, scale):
+    m = masks(canvas, scale)
+    base = Image.new("RGBA", (canvas, canvas), WHITE + (255,))
+    base.putalpha(m["bubble"])
+    letter = ring_fill(canvas, scale).convert("RGBA")
+    letter.putalpha(m["ring"])
+    base.alpha_composite(letter)
+    return base
+
+
+def icon(canvas, scale):
+    base = background(canvas).convert("RGBA")
+    base.alpha_composite(glyph(canvas, scale))
+    return base
+
+
+def silhouette(canvas, scale):
+    image = Image.new("RGBA", (canvas, canvas), WHITE + (255,))
+    image.putalpha(masks(canvas, scale)["cutout"])
     return image
+
+
+def rounded(image, radius_ratio):
+    size = image.size[0]
+    big = Image.new("L", (size * SUPERSAMPLE, size * SUPERSAMPLE), 0)
+    ImageDraw.Draw(big).rounded_rectangle(
+        (0, 0, size * SUPERSAMPLE - 1, size * SUPERSAMPLE - 1),
+        radius=size * SUPERSAMPLE * radius_ratio,
+        fill=255,
+    )
+    clipped = image.copy()
+    clipped.putalpha(big.resize((size, size), Image.LANCZOS))
+    return clipped
+
+
+def disc(image):
+    size = image.size[0]
+    big = Image.new("L", (size * SUPERSAMPLE, size * SUPERSAMPLE), 0)
+    ImageDraw.Draw(big).ellipse((0, 0, size * SUPERSAMPLE - 1, size * SUPERSAMPLE - 1), fill=255)
+    clipped = image.copy()
+    clipped.putalpha(big.resize((size, size), Image.LANCZOS))
+    return clipped
 
 
 def save(image, path):
@@ -94,30 +197,26 @@ def chime(path):
 
 
 def main():
-    accent_bg = flat(1024, ACCENT)
-    save(compose(accent_bg, 1024, 1.0), RES / "icon-only.png")
-    save(accent_bg, RES / "icon-background.png")
-    foreground = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
-    foreground.alpha_composite(glyph(1024, WHITE, scale=0.62))
-    save(foreground, RES / "icon-foreground.png")
+    master = icon(1024, 1.12).convert("RGB")
+    save(master, RES / "icon-only.png")
+    save(background(1024), RES / "icon-background.png")
+    save(glyph(1024, 0.8), RES / "icon-foreground.png")
 
-    splash = flat(2732, BG_DARK)
-    logo = compose(flat(560, ACCENT), 560, 1.0)
-    mask = Image.new("L", (560, 560), 0)
-    ImageDraw.Draw(mask).ellipse((0, 0, 559, 559), fill=255)
-    splash.paste(logo, ((2732 - 560) // 2, (2732 - 560) // 2), mask)
+    save(master.resize((512, 512), Image.LANCZOS), ROOT / "icon-512.png")
+    save(master.resize((192, 192), Image.LANCZOS), ROOT / "icon-192.png")
+    save(icon(512, 0.95).convert("RGB"), ROOT / "icon-maskable-512.png")
+
+    splash = Image.new("RGBA", (2732, 2732), BG_DARK + (255,))
+    tile = rounded(icon(780, 1.12), 0.2237)
+    splash.alpha_composite(tile, ((2732 - 780) // 2, (2732 - 780) // 2))
     save(splash, RES / "splash.png")
     save(splash, RES / "splash-dark.png")
 
-    splash_icon = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
-    disc = Image.new("L", (512, 512), 0)
-    ImageDraw.Draw(disc).ellipse((0, 0, 511, 511), fill=255)
-    splash_icon.paste(compose(flat(512, ACCENT), 512, 1.0), (0, 0), disc)
-    save(splash_icon, ANDROID / "splash_icon.png")
+    save(disc(icon(512, 1.12)), ANDROID / "splash_icon.png")
 
     sizes = {"mdpi": 24, "hdpi": 36, "xhdpi": 48, "xxhdpi": 72, "xxxhdpi": 96}
     for density, size in sizes.items():
-        save(glyph(size, WHITE, scale=0.92), ANDROID / "notification-icon" / (density + ".png"))
+        save(silhouette(size, 1024 / 580 * 0.92), ANDROID / "notification-icon" / (density + ".png"))
 
     chime(ANDROID / "raw" / "kotha_message.wav")
 
