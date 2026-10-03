@@ -204,6 +204,7 @@ let chatUnsubs = [];
 let pendingName = "";
 let signup = false;
 let blocked = new Set();
+let blockedReady = false;
 let deleting = false;
 let muted = {};
 let callDocs = new Map();
@@ -246,6 +247,7 @@ const readSent = new Map();
 const tsMs = ts => (ts && typeof ts.toMillis === "function" ? ts.toMillis() : 0);
 const unreadOf = (c, uid) => {
   if (active?.id === c.id && !document.hidden) return 0;
+  if (!c.group && blocked.has(peerIdOf(c, uid))) return 0;
   const n = Math.max(0, Math.floor(Number(c.unread?.[uid]) || 0));
   if (!n || c.lastFrom === uid) return 0;
   const last = tsMs(c.lastAt);
@@ -486,10 +488,11 @@ async function logout() {
   await signOut(auth);
 }
 
-const PRESENCE_BEAT_MS = 40000;
-const PRESENCE_STALE_MS = 100000;
+const PRESENCE_BEAT_MS = 30000;
+const PRESENCE_STALE_MS = 240000;
 let clockSkew = 0;
 let beatSentAt = 0;
+let skewArmed = false;
 const serverNow = () => Date.now() - clockSkew;
 const isOnline = u => !!u && u.online === true && serverNow() - tsMs(u.lastSeen) < PRESENCE_STALE_MS && tsMs(u.lastSeen) > 0;
 
@@ -534,14 +537,16 @@ const setPresenceBadge = (av, u) => {
 const setPresence = on => {
   if (!auth.currentUser || deleting) return Promise.resolve();
   beatSentAt = Date.now();
+  skewArmed = true;
   return updateDoc(doc(db, "users", auth.currentUser.uid), { online: on, lastSeen: serverTimestamp() }).catch(() => {});
 };
 
 const learnClockSkew = (s, uid) => {
-  if (!beatSentAt || s.metadata.hasPendingWrites || s.metadata.fromCache) return;
+  if (!skewArmed || s.metadata.hasPendingWrites || s.metadata.fromCache) return;
   const ls = tsMs(s.data()?.lastSeen);
   const now = Date.now();
   if (!ls || now - beatSentAt > 15000) return;
+  skewArmed = false;
   const skew = (beatSentAt + now) / 2 - ls;
   if (Math.abs(skew) < 86400000) clockSkew = skew;
 };
@@ -567,9 +572,11 @@ setInterval(() => {
 }, PRESENCE_BEAT_MS);
 setInterval(presenceTick, 20000);
 addEventListener("focus", () => { if (!document.hidden) setPresence(true); });
+addEventListener("pageshow", () => { if (!document.hidden) setPresence(true); });
+addEventListener("online", () => { if (!document.hidden) setPresence(true); });
 
 document.addEventListener("visibilitychange", () => {
-  setPresence(!document.hidden);
+  setPresence(true);
   markRead();
   renderList();
   if (!document.hidden) renderPeer();
@@ -599,8 +606,7 @@ function markRead(force = false) {
   write(0);
 }
 addEventListener("focus", () => markRead());
-addEventListener("beforeunload", () => setPresence(false));
-addEventListener("pagehide", () => setPresence(false));
+addEventListener("pagehide", () => setPresence(true));
 
 const isPasswordUser = u => (u?.providerData || []).some(p => p.providerId === "password");
 
@@ -676,6 +682,7 @@ onAuthStateChanged(auth, async user => {
     lastAtSeen.clear();
     goneCache.clear();
     blocked = new Set();
+    blockedReady = false;
     muted = {};
     callDocs = new Map();
     callHistoryOn = false;
@@ -741,9 +748,14 @@ onAuthStateChanged(auth, async user => {
   watchUser(user.uid);
   unsubs.push(onSnapshot(collection(db, "users", user.uid, "blocked"), s => {
     blocked = new Set(s.docs.map(d => d.id));
+    blockedReady = true;
     blocked.forEach(watchUser);
+    clearBlockedUnread();
     refreshBlockedUi();
-  }, () => {}));
+  }, () => {
+    blockedReady = true;
+    renderList();
+  }));
   unsubs.push(onSnapshot(doc(db, "pushTokens", user.uid), s => {
     muted = s.exists() ? s.data().muted || {} : {};
     renderList();
@@ -767,11 +779,29 @@ onAuthStateChanged(auth, async user => {
     });
     chats = s.docs.map(d => ({ id: d.id, ...d.data() }));
     chats.flatMap(c => c.members || []).forEach(watchUser);
+    clearBlockedUnread();
     markDelivered(chats);
     renderList();
     checkReady();
   }, hideSplash));
 });
+
+const blockClearSent = new Map();
+
+function clearBlockedUnread() {
+  const uid = auth.currentUser?.uid;
+  if (!uid || deleting || !blockedReady) return;
+  chats.forEach(c => {
+    if (c.group || !Array.isArray(c.members) || c.members.length !== 2) return;
+    if (!blocked.has(peerIdOf(c, uid))) return;
+    const n = Number(c.unread?.[uid]) || 0;
+    if (!n) return;
+    const key = n + ":" + tsMs(c.lastAt);
+    if (blockClearSent.get(c.id) === key) return;
+    blockClearSent.set(c.id, key);
+    setDoc(doc(db, "chats", c.id), { unread: { [uid]: 0 }, readAt: { [uid]: serverTimestamp() } }, { merge: true }).catch(() => blockClearSent.delete(c.id));
+  });
+}
 
 function markDelivered(list) {
   const uid = auth.currentUser?.uid;
@@ -1140,7 +1170,7 @@ function renderList() {
   const term = $("search").value.trim().toLowerCase();
   const hit = name => !term || (name || "").toLowerCase().includes(term);
   const totalUnread = chats.reduce((n, c) => n + (isMuted(c.id) || (!c.group && blocked.has(peerIdOf(c, uid))) ? 0 : unreadOf(c, uid)), 0);
-  setBadgeCount(totalUnread);
+  if (blockedReady) setBadgeCount(totalUnread);
   document.title = (totalUnread ? `(${totalUnread}) ` : "") + "Cova";
   $("railBadge").hidden = !totalUnread;
   $("railBadge").textContent = totalUnread > 99 ? "99+" : totalUnread;
@@ -2707,7 +2737,9 @@ const openInfoFromHeader = () => {
 $("peerAv").onclick = openInfoFromHeader;
 document.querySelector("#pane > header .who").onclick = openInfoFromHeader;
 
-const peerIdOf = (c, uid) => c.members.find(m => m !== uid);
+function peerIdOf(c, uid) {
+  return (c.members || []).find(m => m !== uid);
+}
 const nameOf = id => users.get(id)?.name || t("common.user");
 const blockedRef = id => doc(db, "users", auth.currentUser.uid, "blocked", id);
 
