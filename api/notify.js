@@ -98,7 +98,11 @@ const totalUnread = async (db, uid, muted) => {
     if (mutedUntil(muted, d.id)) return;
     const chat = d.data();
     if (chat.group !== true && (chat.members || []).some(m => blocked.has(m))) return;
-    total += Number((chat.unread || {})[uid]) || 0;
+    const count = Number((chat.unread || {})[uid]) || 0;
+    const lastAt = chat.lastAt && chat.lastAt.toMillis ? chat.lastAt.toMillis() : 0;
+    const readAt = chat.readAt && chat.readAt[uid] && chat.readAt[uid].toMillis ? chat.readAt[uid].toMillis() : 0;
+    if (chat.lastFrom === uid || (readAt && lastAt && readAt >= lastAt)) return;
+    total += count;
   });
   return total;
 };
