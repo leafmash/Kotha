@@ -227,11 +227,59 @@
         <b id="profileName"></b>
         <small data-i18n="chat.online">Online</small>
       </div>
-      <div class="scard">
-        <button class="srow" id="profileSetPhoto"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span><span class="stext" data-i18n="profile.setPhoto">Set profile photo</span></button>
+      <div class="pbtns">
+        <button class="pbtn" id="profileSetPhoto"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg><span data-i18n="profile.setPhoto">Set profile photo</span></button>
+        <button class="pbtn" id="profileEdit"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg><span data-i18n="profile.edit">Edit profile</span></button>
       </div>
       <div class="glabel" data-i18n="profile.info">Info</div>
       <div class="scard" id="profileInfo"></div>
+    </div>
+  </div>
+</div>
+<div id="editProfileSheet" hidden>
+  <div class="panel">
+    <header>
+      <button id="editProfileClose" title="Back" data-i18n-title="common.back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="ht"><b data-i18n="profile.edit">Edit profile</b></div>
+      <button class="hsave" id="editProfileSave" data-i18n="profile.save">Save</button>
+    </header>
+    <div class="gbody">
+      <div class="glabel" data-i18n="profile.name">Name</div>
+      <div class="scard fcard">
+        <input id="epName" maxlength="40" autocomplete="off" placeholder="Your name" data-i18n-placeholder="profile.namePh">
+      </div>
+      <div class="glabel" data-i18n="profile.about">About</div>
+      <div class="scard fcard">
+        <textarea id="epBio" rows="3" maxlength="140" placeholder="Write a few words about yourself" data-i18n-placeholder="profile.aboutPh"></textarea>
+        <small class="fcount" id="epBioCount"></small>
+      </div>
+      <p class="fhint" data-i18n="profile.editHint">Your email can't be changed here.</p>
+    </div>
+  </div>
+</div>
+<div id="userSheet" hidden>
+  <div class="panel">
+    <header>
+      <button id="userClose" title="Back" data-i18n-title="common.back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="ht"><b data-i18n="profile.title">Profile</b></div>
+    </header>
+    <div class="gbody">
+      <div class="ptop">
+        <div class="pavatar"><img id="userImg" alt=""></div>
+        <b id="userName"></b>
+        <small id="userStatus"></small>
+      </div>
+      <div class="pbtns">
+        <button class="pbtn" id="userMessage"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg><span data-i18n="user.message">Message</span></button>
+        <button class="pbtn" id="userBlock"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg><span id="userBlockText"></span></button>
+      </div>
+      <div id="userAboutWrap">
+        <div class="glabel" data-i18n="profile.about">About</div>
+        <div class="scard" id="userAbout"></div>
+      </div>
+      <div class="scard sgap">
+        <button class="srow danger" id="userReport"><span class="ico"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></span><span class="stext" data-i18n="user.report">Report user</span></button>
+      </div>
     </div>
   </div>
 </div>

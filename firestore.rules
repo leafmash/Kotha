@@ -102,6 +102,15 @@ service cloud.firestore {
             || (o.members.hasAll(n.members)
               && (!('admin' in o) || o.admin in n.members))));
     }
+    function ownReadReset() {
+      let o = resource.data;
+      let n = request.resource.data;
+      return n.diff(o).affectedKeys().hasOnly(['unread', 'readAt'])
+        && n.get('unread', {}).diff(o.get('unread', {})).affectedKeys().hasOnly([request.auth.uid])
+        && n.get('unread', {})[request.auth.uid] == 0
+        && n.get('readAt', {}).diff(o.get('readAt', {})).affectedKeys().hasOnly([request.auth.uid])
+        && n.get('readAt', {})[request.auth.uid] == request.time;
+    }
     function ownDelete() {
       let o = resource.data;
       let n = request.resource.data;
@@ -215,8 +224,8 @@ service cloud.firestore {
       allow create: if signedIn() && request.auth.uid in request.resource.data.members;
       allow update: if signedIn()
         && request.auth.uid in resource.data.members
-        && !blockedByOther(resource.data)
-        && (leavesGroup() || (groupMetaOk() && membersChangeOk()));
+        && ((!blockedByOther(resource.data) && (leavesGroup() || (groupMetaOk() && membersChangeOk())))
+          || ownReadReset());
       match /messages/{messageId} {
         allow read: if isMember(chatId);
         allow create: if isMember(chatId)

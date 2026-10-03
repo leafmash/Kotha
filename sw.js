@@ -1,4 +1,4 @@
-const CACHE = "cova-v39";
+const CACHE = "cova-v47";
 const SHELL = ["./", "index.html", "css/style.css", "js/app.js", "js/call.js", "js/i18n.js", "js/push-trigger.js", "icon.svg", "icon-192.png"];
 
 self.addEventListener("install", e => {
