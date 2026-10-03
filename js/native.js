@@ -34,9 +34,24 @@ export async function hideNativeSplash() {
   SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {});
 }
 
+const toHex6 = value => {
+  const v = String(value || "").trim().toLowerCase();
+  let m = v.match(/^#([0-9a-f]{3})$/);
+  if (m) return "#" + m[1].split("").map(c => c + c).join("");
+  m = v.match(/^#([0-9a-f]{6})$/);
+  if (m) return v;
+  m = v.match(/^#([0-9a-f]{8})$/);
+  if (m) return "#" + m[1].slice(0, 6);
+  m = v.match(/^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/);
+  if (m) return "#" + [m[1], m[2], m[3]].map(n => Math.min(255, Number(n)).toString(16).padStart(2, "0")).join("");
+  return "";
+};
+
 export function applyStatusBar(dark) {
   if (!StatusBar) return;
-  const color = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#0d0f1c";
+  const root = document.documentElement;
+  const light = root.dataset.theme === "light";
+  const color = toHex6(getComputedStyle(root).getPropertyValue("--bg")) || (light ? "#ffffff" : "#0d0f1c");
   StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
   StatusBar.setBackgroundColor({ color }).catch(() => {});
   StatusBar.setStyle({ style: dark ? "DARK" : "LIGHT" }).catch(() => {});

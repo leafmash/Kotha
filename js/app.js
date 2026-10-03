@@ -241,7 +241,20 @@ let filter = "all";
 const drafts = new Map();
 const lastAtSeen = new Map();
 const goneCache = new Map();
-const unreadOf = (c, uid) => active?.id === c.id && !document.hidden ? 0 : (c.unread?.[uid] || 0);
+const readLocal = new Map();
+const readSent = new Map();
+const tsMs = ts => (ts && typeof ts.toMillis === "function" ? ts.toMillis() : 0);
+const unreadOf = (c, uid) => {
+  if (active?.id === c.id && !document.hidden) return 0;
+  const n = Math.max(0, Math.floor(Number(c.unread?.[uid]) || 0));
+  if (!n || c.lastFrom === uid) return 0;
+  const last = tsMs(c.lastAt);
+  const cleared = readLocal.get(c.id);
+  if (cleared !== undefined && last <= cleared) return 0;
+  const readAt = tsMs(c.readAt?.[uid]);
+  if (readAt && last && readAt >= last) return 0;
+  return n;
+};
 
 const hadSession = localStorage.getItem("kotha-session") === "1";
 const hideSplash = () => {
@@ -264,11 +277,70 @@ const checkReady = () => {
 };
 if (hadSession) showSplash();
 
-const toggleTheme = () => {
-  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+let themePoint = null;
+let themeBusy = false;
+addEventListener("pointerdown", e => { themePoint = { x: e.clientX, y: e.clientY }; }, true);
+addEventListener("keydown", () => { themePoint = null; }, true);
+
+const commitTheme = next => {
   document.documentElement.dataset.theme = next;
   localStorage.setItem("theme", next);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", next === "light" ? "#ffffff" : "#0d0f1c");
   applyStatusBar(next !== "light");
+};
+
+const themeVeil = (x, y, r, color, done) => {
+  const veil = document.createElement("div");
+  veil.style.cssText = "position:fixed;inset:0;z-index:99999;pointer-events:none;background:" + color;
+  document.body.append(veil);
+  const start = performance.now();
+  const dur = 560;
+  const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+  const step = now => {
+    const p = Math.min(1, (now - start) / dur);
+    const rad = Math.round(r * ease(p));
+    const m = "radial-gradient(circle at " + x + "px " + y + "px, transparent " + rad + "px, #000 " + (rad + 1) + "px)";
+    veil.style.webkitMaskImage = m;
+    veil.style.maskImage = m;
+    if (p < 1) requestAnimationFrame(step);
+    else {
+      veil.remove();
+      done();
+    }
+  };
+  requestAnimationFrame(step);
+};
+
+const toggleTheme = () => {
+  const root = document.documentElement;
+  const next = root.dataset.theme === "dark" ? "light" : "dark";
+  const x = Math.round(themePoint?.x ?? innerWidth - 28);
+  const y = Math.round(themePoint?.y ?? 28);
+  const r = Math.ceil(Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y)));
+  if (themeBusy || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    commitTheme(next);
+    return;
+  }
+  themeBusy = true;
+  const finish = () => { themeBusy = false; };
+  if (typeof document.startViewTransition === "function") {
+    root.classList.add("theme-vt");
+    const vt = document.startViewTransition(() => commitTheme(next));
+    vt.ready.then(() => {
+      root.animate(
+        { clipPath: ["circle(0px at " + x + "px " + y + "px)", "circle(" + r + "px at " + x + "px " + y + "px)"] },
+        { duration: 560, easing: "cubic-bezier(.45,.05,.2,1)", pseudoElement: "::view-transition-new(root)" }
+      );
+    }).catch(() => {});
+    vt.finished.catch(() => {}).finally(() => {
+      root.classList.remove("theme-vt");
+      finish();
+    });
+  } else {
+    const oldBg = getComputedStyle(document.body).backgroundColor;
+    commitTheme(next);
+    themeVeil(x, y, r, oldBg, finish);
+  }
 };
 
 const moreMenu = $("moreMenu");
@@ -323,6 +395,7 @@ onLangChange(() => {
     if (!chatMenu.hidden) openChatMenu();
     renderBlockedList();
     renderProfile();
+    renderUserProfile();
     if (!$("reportBox").hidden) renderReasons();
     if (!$("forwardSheet").hidden) renderForward();
     syncVerifyBar();
@@ -413,25 +486,121 @@ async function logout() {
   await signOut(auth);
 }
 
-const setPresence = on => auth.currentUser && !deleting
-  ? updateDoc(doc(db, "users", auth.currentUser.uid), { online: on, lastSeen: serverTimestamp() }).catch(() => {})
-  : Promise.resolve();
+const PRESENCE_BEAT_MS = 40000;
+const PRESENCE_STALE_MS = 100000;
+let clockSkew = 0;
+let beatSentAt = 0;
+const serverNow = () => Date.now() - clockSkew;
+const isOnline = u => !!u && u.online === true && serverNow() - tsMs(u.lastSeen) < PRESENCE_STALE_MS && tsMs(u.lastSeen) > 0;
+
+const presenceText = u => {
+  if (isOnline(u)) return t("presence.now");
+  const ms = tsMs(u?.lastSeen);
+  if (!ms) return t("chat.offline");
+  const mins = Math.floor(Math.max(0, serverNow() - ms) / 60000);
+  if (mins < 1) return t("presence.justNow");
+  if (mins < 60) return t("presence.min", { n: fmtNumber(mins) });
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return t("presence.hour", { n: fmtNumber(hours) });
+  const d = new Date(ms);
+  const ref = new Date();
+  ref.setDate(ref.getDate() - 1);
+  if (hours < 48 && d.toDateString() === ref.toDateString()) return t("presence.yesterday");
+  const days = Math.floor(hours / 24);
+  if (days < 7) return t("presence.day", { n: fmtNumber(days) });
+  return t("presence.on", { date: d.toLocaleDateString(locale(), { day: "numeric", month: "short" }) });
+};
+
+const presenceShort = u => {
+  if (!u || isOnline(u)) return "";
+  const ms = tsMs(u.lastSeen);
+  if (!ms) return "";
+  const mins = Math.max(1, Math.floor(Math.max(0, serverNow() - ms) / 60000));
+  if (mins < 60) return t("presence.short.m", { n: fmtNumber(mins) });
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return t("presence.short.h", { n: fmtNumber(hours) });
+  const days = Math.floor(hours / 24);
+  return days < 7 ? t("presence.short.d", { n: fmtNumber(days) }) : "";
+};
+
+const setPresenceBadge = (av, u) => {
+  av.querySelector(".pb")?.remove();
+  const online = isOnline(u);
+  const text = online ? "" : presenceShort(u);
+  if (!online && !text) return;
+  av.append(el("span", "pb " + (online ? "dot" : "time"), text));
+};
+
+const setPresence = on => {
+  if (!auth.currentUser || deleting) return Promise.resolve();
+  beatSentAt = Date.now();
+  return updateDoc(doc(db, "users", auth.currentUser.uid), { online: on, lastSeen: serverTimestamp() }).catch(() => {});
+};
+
+const learnClockSkew = (s, uid) => {
+  if (!beatSentAt || s.metadata.hasPendingWrites || s.metadata.fromCache) return;
+  const ls = tsMs(s.data()?.lastSeen);
+  const now = Date.now();
+  if (!ls || now - beatSentAt > 15000) return;
+  const skew = (beatSentAt + now) / 2 - ls;
+  if (Math.abs(skew) < 86400000) clockSkew = skew;
+};
+
+let presenceSig = "";
+const presenceSignature = () => {
+  let sig = Math.floor(serverNow() / 60000) + ":";
+  users.forEach((u, id) => { if (isOnline(u)) sig += id + ","; });
+  return sig;
+};
+const presenceTick = () => {
+  if (!auth.currentUser || document.hidden) return;
+  if (active) renderPeer();
+  renderUserProfile();
+  const sig = presenceSignature();
+  if (sig !== presenceSig) {
+    presenceSig = sig;
+    renderList();
+  }
+};
+setInterval(() => {
+  if (auth.currentUser && !document.hidden && !deleting) setPresence(true);
+}, PRESENCE_BEAT_MS);
+setInterval(presenceTick, 20000);
+addEventListener("focus", () => { if (!document.hidden) setPresence(true); });
 
 document.addEventListener("visibilitychange", () => {
   setPresence(!document.hidden);
   markRead();
   renderList();
+  if (!document.hidden) renderPeer();
 });
 
 function markRead(force = false) {
   if (!active || document.hidden || !auth.currentUser || deleting) return;
   const uid = auth.currentUser.uid;
-  const listed = chats.find(c => c.id === active.id);
-  const pending = (active.data?.unread?.[uid] || 0) + (listed?.unread?.[uid] || 0);
+  const chatId = active.id;
+  const listed = chats.find(c => c.id === chatId);
+  const pending = Math.max(Number(active.data?.unread?.[uid]) || 0, Number(listed?.unread?.[uid]) || 0);
+  const last = Math.max(tsMs(active.data?.lastAt), tsMs(listed?.lastAt));
   if (!force && !pending) return;
-  setDoc(doc(db, "chats", active.id), { unread: { [uid]: 0 } }, { merge: true }).catch(() => {});
+  readLocal.set(chatId, Math.max(readLocal.get(chatId) || 0, last));
+  const key = pending + ":" + last;
+  if (!force && readSent.get(chatId) === key) return;
+  readSent.set(chatId, key);
+  const write = attempt => setDoc(doc(db, "chats", chatId), { unread: { [uid]: 0 }, readAt: { [uid]: serverTimestamp() } }, { merge: true }).catch(() => {
+    if (attempt >= 4) {
+      readSent.delete(chatId);
+      return;
+    }
+    setTimeout(() => {
+      if (auth.currentUser?.uid === uid && !deleting) write(attempt + 1);
+    }, 1500 * (attempt + 1));
+  });
+  write(0);
 }
+addEventListener("focus", () => markRead());
 addEventListener("beforeunload", () => setPresence(false));
+addEventListener("pagehide", () => setPresence(false));
 
 const isPasswordUser = u => (u?.providerData || []).some(p => p.providerId === "password");
 
@@ -512,7 +681,11 @@ onAuthStateChanged(auth, async user => {
     callHistoryOn = false;
     deliverKeys.clear();
     $("termsGate").hidden = true;
+    readLocal.clear();
+    readSent.clear();
     $("settingsSheet").hidden = true;
+    closeUserProfile();
+    $("editProfileSheet").hidden = true;
     $("blockedSheet").hidden = true;
     $("profileSheet").hidden = true;
     $("forwardSheet").hidden = true;
@@ -623,15 +796,17 @@ function markDelivered(list) {
 
 function watchUser(id) {
   if (!id || userWatch.has(id)) return;
-  userWatch.set(id, onSnapshot(doc(db, "users", id), s => {
+  userWatch.set(id, onSnapshot(doc(db, "users", id), { includeMetadataChanges: id === auth.currentUser?.uid }, s => {
     if (s.exists()) users.set(id, s.data());
     else users.delete(id);
     if (auth.currentUser && id === auth.currentUser.uid) {
+      learnClockSkew(s, id);
       usersLoaded = true;
       renderMe();
     }
     renderList();
     renderPeer();
+    renderUserProfile();
     checkReady();
   }, () => {
     if (auth.currentUser && id === auth.currentUser.uid) {
@@ -740,7 +915,9 @@ function renderProfile() {
   $("settingsName").textContent = name;
   $("settingsEmail").textContent = user.email || "";
   $("langValue").textContent = getLang() === "en" ? "English" : "বাংলা";
+  const bio = (me?.bio || "").trim();
   const rows = [infoRow(name, t("profile.name"))];
+  if (bio) rows.push(infoRow(bio, t("profile.about")));
   if (user.email) {
     rows.push(infoRow(user.email, t("profile.email")));
     rows.push(infoRow(t(user.emailVerified ? "profile.verified" : "profile.notVerified"), t("profile.emailStatus")));
@@ -763,6 +940,141 @@ function closeProfile() {
 }
 
 $("profileClose").onclick = closeProfile;
+
+let userSheetId = null;
+
+function renderUserProfile() {
+  if ($("userSheet").hidden || !userSheetId) return;
+  const id = userSheetId;
+  const u = users.get(id) || {};
+  const name = u.name || t("common.user");
+  $("userImg").src = pic(u.name ? u : { ...u, name });
+  $("userName").textContent = name;
+  const status = $("userStatus");
+  const online = isOnline(u);
+  status.textContent = presenceText(u);
+  status.classList.toggle("live", online);
+  const isBlocked = blocked.has(id);
+  $("userBlockText").textContent = t(isBlocked ? "user.unblock" : "user.block");
+  $("userBlock").classList.toggle("danger", !isBlocked);
+  $("userReport").hidden = !active;
+  const bio = (u.bio || "").trim();
+  $("userAboutWrap").hidden = !bio;
+  const aboutRow = el("div", "irow");
+  aboutRow.append(el("b", "", bio));
+  $("userAbout").replaceChildren(...(bio ? [aboutRow] : []));
+}
+
+function openUserProfile(id) {
+  if (!id || !auth.currentUser) return;
+  if (id === auth.currentUser.uid) {
+    openProfile();
+    return;
+  }
+  userSheetId = id;
+  watchUser(id);
+  $("userSheet").hidden = false;
+  $("userSheet").querySelector(".gbody").scrollTop = 0;
+  renderUserProfile();
+}
+
+function closeUserProfile() {
+  $("userSheet").hidden = true;
+  userSheetId = null;
+}
+
+$("userClose").onclick = closeUserProfile;
+$("userMessage").onclick = () => {
+  const id = userSheetId;
+  const peer = users.get(id);
+  closeUserProfile();
+  if (!id || !peer) return;
+  if (active && !active.group && active.peer === id) return;
+  $("infoSheet").hidden = true;
+  openChat({ ...peer, uid: id });
+};
+$("userBlock").onclick = () => {
+  const id = userSheetId;
+  if (!id) return;
+  if (blocked.has(id)) unblockFlow(id);
+  else blockFlow(id);
+};
+$("userReport").onclick = () => {
+  const id = userSheetId;
+  if (!id || !active) return;
+  openReport({ type: "user", chatId: active.id, targetUid: id, title: t("report.titleUser", { name: nameOf(id) }) });
+};
+
+const epName = $("epName");
+const epBio = $("epBio");
+let epInitial = { name: "", bio: "" };
+const cleanName = v => v.replace(/\s+/g, " ").trim();
+const cleanBio = v => v.replace(/[ \t]+/g, " ").replace(/\s*\n\s*/g, "\n").trim();
+
+function syncEditProfile() {
+  $("epBioCount").textContent = fmtNumber(epBio.value.length) + "/" + fmtNumber(epBio.maxLength);
+  $("editProfileSave").disabled = !cleanName(epName.value);
+}
+
+function openEditProfile() {
+  const user = auth.currentUser;
+  if (!user) return;
+  const me = users.get(user.uid);
+  epInitial = { name: me?.name || user.displayName || "", bio: me?.bio || "" };
+  epName.value = epInitial.name;
+  epBio.value = epInitial.bio;
+  syncEditProfile();
+  $("editProfileSheet").hidden = false;
+  $("editProfileSheet").querySelector(".gbody").scrollTop = 0;
+  epName.focus();
+}
+
+function closeEditProfile() {
+  $("editProfileSheet").hidden = true;
+  epName.blur();
+  epBio.blur();
+}
+
+async function saveEditProfile() {
+  const user = auth.currentUser;
+  if (!user) return;
+  const name = cleanName(epName.value).slice(0, epName.maxLength);
+  const bio = cleanBio(epBio.value).slice(0, epBio.maxLength);
+  if (!name) {
+    toast(t("profile.nameRequired"));
+    return;
+  }
+  if (name === epInitial.name && bio === epInitial.bio) {
+    closeEditProfile();
+    return;
+  }
+  if (!navigator.onLine) {
+    toast(t("profile.offline"));
+    return;
+  }
+  $("editProfileSave").disabled = true;
+  try {
+    await updateDoc(doc(db, "users", user.uid), { name, bio });
+    if (name !== epInitial.name) updateProfile(user, { displayName: name }).catch(() => {});
+    toast(t("profile.saved"));
+    closeEditProfile();
+  } catch {
+    toast(t("profile.saveFail"));
+    syncEditProfile();
+  }
+}
+
+$("profileEdit").onclick = openEditProfile;
+$("editProfileClose").onclick = closeEditProfile;
+$("editProfileSave").onclick = saveEditProfile;
+epName.oninput = syncEditProfile;
+epBio.oninput = syncEditProfile;
+epName.onkeydown = e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    saveEditProfile();
+  }
+};
 $("profileAvatar").onclick = () => $("avatarInput").click();
 $("profileSetPhoto").onclick = () => $("avatarInput").click();
 $("settingsMe").onclick = () => openProfile();
@@ -801,11 +1113,12 @@ $("avatarInput").onchange = async e => {
 
 function row(u, sub, time, unread, fn, isActive, silent) {
   const r = el("div", "row" + (isActive ? " active" : "") + (unread > 0 ? " unread" : ""));
-  const av = el("div", "av" + (u.online ? " online" : ""));
+  const av = el("div", "av");
   const img = el("img");
   img.src = pic(u);
   img.alt = "";
   av.append(img);
+  setPresenceBadge(av, u);
   const body = el("div", "body");
   const top = el("div", "top");
   top.append(el("b", "", u.name || t("common.user")), el("time", "", time));
@@ -1012,6 +1325,7 @@ function closeChat() {
   chatUnsubs = [];
   active = null;
   setActiveChat(null);
+  closeUserProfile();
   $("infoSheet").hidden = true;
   $("editBox").hidden = true;
   $("pane").hidden = true;
@@ -1045,6 +1359,7 @@ async function openChat(peer, group) {
   clearReply();
   renderPeer();
   renderList();
+  markRead();
 
   chatUnsubs.push(onSnapshot(ref, s => {
     if (!active || active.id !== id) return;
@@ -1110,6 +1425,7 @@ function renderPeer() {
     const typers = Object.entries(g.typing || {}).filter(([k, v]) => v && k !== auth.currentUser.uid).map(([k]) => users.get(k)?.name).filter(Boolean);
     $("peerImg").src = pic({ name: g.name, photo: g.photo });
     $("peerAv").className = "av";
+    $("peerAv").querySelector(".pb")?.remove();
     $("peerName").textContent = g.name || "";
     $("peerStatus").classList.toggle("live", typers.length > 0);
     $("peerStatus").textContent = typers.length ? t("chat.typingMany", { names: typers.join(", ") }) : t("chat.members", { n: fmtNumber(g.members?.length || 0) });
@@ -1127,6 +1443,7 @@ function renderPeer() {
   if (!peer) {
     $("hcalls").hidden = locked;
     $("peerAv").className = "av";
+    $("peerAv").querySelector(".pb")?.remove();
     $("peerName").textContent = "";
     $("peerStatus").classList.remove("live");
     $("peerStatus").textContent = "";
@@ -1135,14 +1452,14 @@ function renderPeer() {
   }
   $("hcalls").hidden = locked;
   $("peerImg").src = pic(peer);
-  $("peerAv").className = "av" + (peer.online ? " online" : "");
+  $("peerAv").className = "av";
+  $("peerAv").querySelector(".pb")?.remove();
+  if (isOnline(peer)) setPresenceBadge($("peerAv"), peer);
   $("peerName").textContent = peer.name || "";
   const status = $("peerStatus");
   const typing = active.data?.typing?.[active.peer];
-  status.classList.toggle("live", !!typing || !!peer.online);
-  if (typing) status.textContent = t("chat.typing");
-  else if (peer.online) status.textContent = t("chat.online");
-  else status.textContent = peer.lastSeen ? t("chat.lastSeen", { day: dayLabel(peer.lastSeen.toDate()), time: clock(peer.lastSeen) }) : t("chat.offline");
+  status.classList.toggle("live", !!typing || isOnline(peer));
+  status.textContent = typing ? t("chat.typing") : presenceText(peer);
 }
 
 function renderMessages(all) {
@@ -1211,6 +1528,10 @@ function renderMessages(all) {
     if (active.group && !mine) {
       const sender = el("div", "sender", users.get(m.from)?.name || "?");
       sender.style.color = palette[[...m.from].reduce((a, ch) => a + ch.charCodeAt(0), 0) % palette.length];
+      sender.onclick = e => {
+        e.stopPropagation();
+        openUserProfile(m.from);
+      };
       b.append(sender);
     }
     const rid = m.replyTo?.id;
@@ -2378,7 +2699,11 @@ $("groupPhotoInput").onchange = async e => {
     toast(err.message || t("group.actionFail"));
   }
 };
-const openInfoFromHeader = () => { if (active?.group) openGroupInfo(); };
+const openInfoFromHeader = () => {
+  if (!active) return;
+  if (active.group) openGroupInfo();
+  else if (active.peer) openUserProfile(active.peer);
+};
 $("peerAv").onclick = openInfoFromHeader;
 document.querySelector("#pane > header .who").onclick = openInfoFromHeader;
 
@@ -2388,6 +2713,7 @@ const blockedRef = id => doc(db, "users", auth.currentUser.uid, "blocked", id);
 
 function refreshBlockedUi() {
   renderList();
+  renderUserProfile();
   if (active) {
     renderPeer();
     if (lastMessageDocs) renderMessages(lastMessageDocs);
@@ -2855,6 +3181,8 @@ document.addEventListener("keydown", e => {
   if (!$("lightbox").hidden) $("lightbox").hidden = true;
   else if (!$("deleteBox").hidden) closeDelete();
   else if (!$("reportBox").hidden) closeReport();
+  else if (!$("userSheet").hidden) closeUserProfile();
+  else if (!$("editProfileSheet").hidden) closeEditProfile();
   else if (!$("blockedSheet").hidden) closeBlocked();
   else if (!$("profileSheet").hidden) closeProfile();
   else if (!$("settingsSheet").hidden) closeSettings();
@@ -2877,6 +3205,8 @@ const handleBack = () => {
   if (!$("choice").hidden) { closeChoice(null); return true; }
   if (!$("editBox").hidden) { closeEdit(null); return true; }
   if (!chatMenu.hidden) { closeChatMenu(); return true; }
+  if (!$("userSheet").hidden) { closeUserProfile(); return true; }
+  if (!$("editProfileSheet").hidden) { closeEditProfile(); return true; }
   if (!$("blockedSheet").hidden) { closeBlocked(); return true; }
   if (!$("profileSheet").hidden) { closeProfile(); return true; }
   if (!$("settingsSheet").hidden) { closeSettings(); return true; }
