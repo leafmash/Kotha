@@ -6,7 +6,8 @@ Firebase (Auth + Firestore + Cloud Messaging) ও Cloudinary ভিত্তি�
 
 | ফাইল | কাজ |
 | --- | --- |
-| `index.html`, `css/style.css`, `js/app.js`, `js/call.js` | অ্যাপ (call.js হলো কল সিস্টেম) |
+| `index.html`, `css/style.css`, `js/app.js`, `js/call.js` | অ্যাপ (app.js হলো এন্ট্রি পয়েন্ট, call.js হলো কল সিস্টেম) |
+| `js/core/`, `js/ui/`, `js/features/` | ফিচার অনুযায়ী আলাদা ES মডিউল (নিচে বিস্তারিত) |
 | `api/turn.js` | কলের জন্য TURN ক্রেডেনশিয়াল (Vercel Function) |
 | `api/notify.js` | মেসেজ ও কলের পুশ নোটিফিকেশন পাঠায় (Vercel Function, Firebase Admin) |
 | `js/i18n.js` | ইংরেজি/বাংলা ভাষা সুইচ (ডিফল্ট ইংরেজি) |
@@ -19,6 +20,35 @@ Firebase (Auth + Firestore + Cloud Messaging) ও Cloudinary ভিত্তি�
 | `vercel.json`, `.vercelignore` | Vercel কনফিগ (শুধু অ্যাপের ফাইল ডিপ্লয় হয়) |
 | `android/`, `tools/inject_android.py`, `.github/workflows/android.yml` | Android APK (বিস্তারিত `android/README.md`-তে) |
 | `firestore.rules`, `firebase.json` | Firebase-এ আলাদাভাবে ডিপ্লয় হয়, Vercel-এ নয় |
+
+## জাভাস্ক্রিপ্ট মডিউল কাঠামো
+
+`js/app.js` এখন শুধু এন্ট্রি পয়েন্ট। প্রতিটি মডিউল নিজের `init...()` ফাংশনে ইভেন্ট ও লিসেনার বসায়, আর `app.js` সেগুলো একটা নির্দিষ্ট ক্রমে চালায়। ক্রম বদলালে একই এলিমেন্টে বসানো হ্যান্ডলারের ক্রম নষ্ট হতে পারে, তাই বদলানোর আগে সতর্ক থাকুন।
+
+| ফোল্ডার / ফাইল | কাজ |
+| --- | --- |
+| `js/core/firebase.js` | Firebase কনফিগ, `app`, `auth`, `db`, `rtdb`, `triggerPush` |
+| `js/core/sdk.js` | Firebase SDK-র সব ইম্পোর্ট এক জায়গায় (ভার্সন বদলাতে শুধু এই ফাইল) |
+| `js/core/state.js` | একাধিক মডিউলের শেয়ার করা অবস্থা (`state.users`, `state.chats`, `state.active` ইত্যাদি) |
+| `js/core/dom.js`, `icons.js`, `format.js`, `message-format.js` | DOM সহায়ক, আইকন, সময়/অবতার ফরম্যাট, মেসেজ প্রিভিউ টেক্সট |
+| `js/core/image.js`, `upload.js`, `linkify.js`, `constants.js` | ছবি কম্প্রেস, Cloudinary আপলোড, লিংক চেনা, ধ্রুবক |
+| `js/locales/en.js`, `bn.js` | ইংরেজি ও বাংলা অনুবাদ টেক্সট (`js/i18n.js` এগুলো ব্যবহার করে) |
+| `js/ui/` | `dialogs` (কনফার্ম/চয়েস/এডিট বক্স), `toast`, `splash`, `theme`, `more-menu`, `keyboard` |
+| `js/features/auth/` | `auth-form` (সাইন ইন/আপ, Google, পাসওয়ার্ড রিসেট), `verify-email`, `session` (লগইন অবস্থার পরিবর্তন), `terms`, `delete-account` |
+| `js/features/presence/` | অনলাইন/লাস্ট সিন (`presence`) |
+| `js/features/contacts/` | `user-watch` (ইউজার ডকুমেন্ট ও প্রেজেন্স শোনা), `find-contact` (ইমেইলে খোঁজা) |
+| `js/features/profile/` | `profile`, `user-profile`, `edit-profile`, `avatar` |
+| `js/features/settings/` | `settings`, `blocked-list` |
+| `js/features/block/`, `report/` | ব্লক/আনব্লক, রিপোর্ট |
+| `js/features/chat-list/` | `chat-list` (তালিকা, ফিল্টার), `row`, `notes` (সক্রিয় স্ট্রিপ ও নোট) |
+| `js/features/chat/` | `chat-session` (খোলা/বন্ধ), `header`, `message-list`, `message-actions`, `message-menu`, `gestures`, `reply`, `forward`, `composer`, `send`, `outbox`, `emoji`, `attachments`, `voice-recorder`, `media-viewer`, `reactions`, `scroll`, `chat-menu`, `mute`, `read-state`, `peer` |
+| `js/features/groups/` | `group-create`, `group-admin`, `group-info`, `group-leave` |
+| `js/features/calls/` | `calls` (কল সিস্টেম চালু করা), `call-history` (কল তালিকা) |
+| `js/features/notifications/` | `notify`, `push` (টোকেন), `service-worker` |
+| `js/features/native/native-bridge.js` | Android ব্যাক বোতাম, ডিপ লিংক, নেটিভ সেটআপ |
+| `js/features/language/language.js` | ভাষা বদলালে সব স্ক্রিন নতুন করে আঁকা |
+
+নিয়ম: নতুন ফিচার হলে `js/features/<ফিচার>/` ফোল্ডারে ফাইল বানান, শেয়ার করা অবস্থা লাগলে `core/state.js`-এ যোগ করুন, আর ইভেন্ট বসানোর কাজ `init...()` ফাংশনে রেখে `app.js`-এ ডাকুন। নতুন ফাইল যোগ করলে `sw.js`-এর `SHELL` তালিকায় যোগ করে `CACHE` ভার্সন বাড়ান।
 
 ## GitHub-এ আপলোড
 
