@@ -8,6 +8,7 @@ import { icon } from "../../core/icons.js";
 import { openChat } from "../chat/chat-session.js";
 import { peerIdOf } from "../chat/peer.js";
 import { isOnline, serverNow } from "../presence/presence.js";
+import { openNoteView } from "./note-view.js";
 import { askEdit } from "../../ui/dialogs.js";
 import { toast } from "../../ui/toast.js";
 
@@ -37,10 +38,17 @@ function stripItem(id, u, mine) {
   if (mine) av.querySelector(".splus").append(icon("plus"));
   const first = (u?.name || "").trim().split(/\s+/)[0] || t("common.user");
   const parts = [];
-  if (note) parts.push(el("span", "snote", note));
-  else if (mine) parts.push(el("span", "snote add", t("note.add")));
+  if (note || mine) {
+    const bubble = el("span", "snote" + (note ? "" : " add"));
+    bubble.append(el("span", "stext", note || t("note.add")));
+    parts.push(bubble);
+  }
   item.append(...parts, av, el("span", "sname", mine ? t("common.you") : first));
-  item.onclick = () => (mine ? editMyNote() : openChat(u));
+  item.onclick = e => {
+    if (mine) editMyNote();
+    else if (note && e.target.closest(".snote")) openNoteView({ user: u, name: (u?.name || "").trim() || t("common.user"), text: note, message: () => openChat(u) });
+    else openChat(u);
+  };
   return item;
 }
 
