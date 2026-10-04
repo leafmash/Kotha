@@ -55,7 +55,7 @@ function stripItem(id, u, mine) {
 export function renderStrip() {
   const strip = $("activeStrip");
   const uid = auth.currentUser?.uid;
-  const show = !!uid && state.filter === "all" && !$("search").value.trim();
+  const show = !!uid && (state.filter === "all" || state.filter === "unread") && !$("search").value.trim();
   strip.hidden = !show;
   if (!show) return;
   const seen = new Set();
