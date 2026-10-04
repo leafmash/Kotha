@@ -7,10 +7,12 @@ import { listTime } from "../../core/format.js";
 import { icon } from "../../core/icons.js";
 import { lastText } from "../../core/message-format.js";
 import { renderCalls, watchCallHistory } from "../calls/call-history.js";
+import { isCleared } from "../chat/cleared.js";
 import { renderStrip } from "./notes.js";
 import { row } from "./row.js";
 import { openChat } from "../chat/chat-session.js";
 import { isMuted } from "../chat/mute.js";
+import { deleteConversation } from "../chat/clear-chat.js";
 import { peerIdOf } from "../chat/peer.js";
 import { unreadOf } from "../chat/read-state.js";
 import { openGroupSheet } from "../groups/group-create.js";
@@ -24,7 +26,7 @@ export function renderList() {
   const uid = auth.currentUser.uid;
   const term = $("search").value.trim().toLowerCase();
   const hit = name => !term || (name || "").toLowerCase().includes(term);
-  const totalUnread = state.chats.reduce((n, c) => n + (isMuted(c.id) || (!c.group && state.blocked.has(peerIdOf(c, uid))) ? 0 : unreadOf(c, uid)), 0);
+  const totalUnread = state.chats.reduce((n, c) => n + (isMuted(c.id) || isCleared(c) || (!c.group && state.blocked.has(peerIdOf(c, uid))) ? 0 : unreadOf(c, uid)), 0);
   if (state.blockedReady) setBadgeCount(totalUnread);
   document.title = (totalUnread ? `(${totalUnread}) ` : "") + "Cova";
   $("railBadge").hidden = !totalUnread;
@@ -52,7 +54,7 @@ export function renderList() {
 
   let count = 0;
   [...state.chats]
-    .filter(c => c.lastMessage)
+    .filter(c => c.lastMessage && !isCleared(c))
     .filter(c => state.filter === "all" || (state.filter === "group" ? c.group : unreadOf(c, uid) > 0))
     .sort((a, b) => (b.lastAt?.seconds || 0) - (a.lastAt?.seconds || 0))
     .forEach(c => {
@@ -64,7 +66,7 @@ export function renderList() {
         if (c.lastFrom === uid) who = t("list.youPrefix");
         else if (c.lastFrom && !hiddenLast) who = (state.users.get(c.lastFrom)?.name || "") + ": ";
         const last = hiddenLast ? t("block.hiddenMessage") : lastText(c.lastMessage);
-        list.append(row(g, who + last, listTime(c.lastAt), unreadOf(c, uid), () => openChat(null, c), state.active?.id === c.id, isMuted(c.id)));
+        list.append(row(g, who + last, listTime(c.lastAt), unreadOf(c, uid), () => openChat(null, c), state.active?.id === c.id, isMuted(c.id), () => deleteConversation(c.id)));
         count++;
         return;
       }
@@ -72,7 +74,7 @@ export function renderList() {
       const peer = state.users.get(peerId);
       if (!peer || state.blocked.has(peerId) || !hit(peer.name)) return;
       const sub = (c.lastFrom === uid ? t("list.youPrefix") : "") + lastText(c.lastMessage);
-      list.append(row(peer, sub, listTime(c.lastAt), unreadOf(c, uid), () => openChat(peer), state.active?.peer === peer.uid, isMuted(c.id)));
+      list.append(row(peer, sub, listTime(c.lastAt), unreadOf(c, uid), () => openChat(peer), state.active?.peer === peer.uid, isMuted(c.id), () => deleteConversation(c.id)));
       count++;
     });
 

@@ -21,6 +21,8 @@ const noteOf = u => {
   return serverNow() - at < NOTE_TTL_MS ? text : "";
 };
 
+let stripSig = "";
+
 function stripItem(id, u, mine) {
   const note = noteOf(u);
   const item = el("button", "sitem");
@@ -33,14 +35,11 @@ function stripItem(id, u, mine) {
   if (mine) av.append(el("span", "splus"));
   else if (isOnline(u)) av.append(el("span", "pb dot"));
   if (mine) av.querySelector(".splus").append(icon("plus"));
-  let cls = "snote";
-  let text = note;
-  if (!note) {
-    cls += mine ? " add" : " none";
-    text = mine ? t("note.add") : "·";
-  }
   const first = (u?.name || "").trim().split(/\s+/)[0] || t("common.user");
-  item.append(el("span", cls, text), av, el("span", "sname", mine ? t("common.you") : first));
+  const parts = [];
+  if (note) parts.push(el("span", "snote", note));
+  else if (mine) parts.push(el("span", "snote add", t("note.add")));
+  item.append(...parts, av, el("span", "sname", mine ? t("common.you") : first));
   item.onclick = () => (mine ? editMyNote() : openChat(u));
   return item;
 }
@@ -64,7 +63,13 @@ export function renderStrip() {
     if (online || noteOf(u)) peers.push({ id, u, online });
   });
   peers.sort((a, b) => Number(b.online) - Number(a.online) || tsMs(b.u.noteAt) - tsMs(a.u.noteAt));
-  strip.replaceChildren(stripItem(uid, state.users.get(uid), true), ...peers.map(p => stripItem(p.id, p.u, false)));
+  const entries = [{ id: uid, u: state.users.get(uid), mine: true }, ...peers.map(p => ({ id: p.id, u: p.u, mine: false }))];
+  const sig = [t("common.you"), t("note.add"), ...entries.map(e => [e.id, e.u?.name || "", pic(e.u), noteOf(e.u), e.mine ? "" : isOnline(e.u) ? 1 : 0].join("\u0001"))].join("\u0002");
+  if (sig === stripSig && strip.childElementCount) return;
+  stripSig = sig;
+  const left = strip.scrollLeft;
+  strip.replaceChildren(...entries.map(e => stripItem(e.id, e.u, e.mine)));
+  strip.scrollLeft = left;
 }
 
 async function editMyNote() {
