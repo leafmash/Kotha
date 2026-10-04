@@ -140,6 +140,14 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if false;
       allow create, update, delete: if signedIn() && request.auth.uid == userId;
+      match /clears/{chatId} {
+        allow get, list: if signedIn() && request.auth.uid == userId;
+        allow create, update: if signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['at'])
+          && request.resource.data.at is timestamp;
+        allow delete: if signedIn() && request.auth.uid == userId;
+      }
       match /blocked/{blockedId} {
         allow get, list: if signedIn() && request.auth.uid == userId;
         allow create: if signedIn()
