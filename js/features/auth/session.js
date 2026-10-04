@@ -10,6 +10,7 @@ import { showTermsGate } from "./terms.js";
 import { refreshVerified, registerLookup, syncVerifyBar } from "./verify-email.js";
 import { refreshBlockedUi } from "../block/block.js";
 import { calls } from "../calls/calls.js";
+import { watchCleared } from "../chat/clear-chat.js";
 import { renderList } from "../chat-list/chat-list.js";
 import { chatMenu, openChatMenu } from "../chat/chat-menu.js";
 import { closeChat, openChatById } from "../chat/chat-session.js";
@@ -29,7 +30,7 @@ import { toast } from "../../ui/toast.js";
 const lastAtSeen = new Map();
 
 export const checkReady = () => {
-  if (!(state.usersLoaded && state.chatsReady)) return;
+  if (!(state.usersLoaded && state.chatsReady && state.clearedReady)) return;
   hideSplash();
   if (state.pendingChat && openChatById(state.pendingChat)) {
     state.pendingChat = null;
@@ -48,6 +49,8 @@ export function initSession() {
       state.chats = [];
       state.usersLoaded = false;
       state.chatsReady = false;
+      state.cleared = new Map();
+      state.clearedReady = false;
       lastAtSeen.clear();
       goneCache.clear();
       state.blocked = new Set();
@@ -83,6 +86,8 @@ export function initSession() {
     $("auth").hidden = true;
     state.usersLoaded = false;
     state.chatsReady = false;
+    state.cleared = new Map();
+    state.clearedReady = false;
     state.users = new Map();
     state.searchState = { term: "", status: "idle", user: null };
     const ref = doc(db, "users", user.uid);
@@ -126,6 +131,10 @@ export function initSession() {
     }, () => {
       state.blockedReady = true;
       renderList();
+    }));
+    state.unsubs.push(watchCleared(user.uid, () => {
+      renderList();
+      checkReady();
     }));
     state.unsubs.push(onSnapshot(doc(db, "pushTokens", user.uid), s => {
       state.muted = s.exists() ? s.data().muted || {} : {};
