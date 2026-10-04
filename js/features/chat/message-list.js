@@ -8,6 +8,7 @@ import { icon } from "../../core/icons.js";
 import { linkify } from "../../core/linkify.js";
 import { callEventParts, callLogText } from "../../core/message-format.js";
 import { calls } from "../calls/calls.js";
+import { messageCleared } from "./cleared.js";
 import { attachGestures } from "./gestures.js";
 import { clearReply } from "./reply.js";
 import { sysText } from "../groups/group-admin.js";
@@ -17,7 +18,9 @@ export const goneCache = new Map();
 
 export function renderMessages(all) {
   const uid = auth.currentUser.uid;
-  const docs = all.filter(d => !(d.data().hiddenFor || []).includes(uid));
+  const wiped = all.some(d => messageCleared(state.active.id, d.data()));
+  if (wiped) state.active.hasMore = false;
+  const docs = all.filter(d => !(d.data().hiddenFor || []).includes(uid) && !messageCleared(state.active.id, d.data()));
   const byId = new Map(all.map(d => [d.id, d.data()]));
   if (state.active.reply?.id && byId.get(state.active.reply.id)?.deleted) clearReply();
   const box = $("messages");

@@ -2,6 +2,7 @@ import { t } from "../../i18n.js";
 import { state } from "../../core/state.js";
 import { $, el } from "../../core/dom.js";
 import { icon } from "../../core/icons.js";
+import { deleteConversation } from "./clear-chat.js";
 import { blockFlow, unblockFlow } from "../block/block.js";
 import { isMuted, muteFlow } from "./mute.js";
 import { openGroupInfo } from "../groups/group-info.js";
@@ -30,6 +31,7 @@ export function openChatMenu() {
   }
   const silenced = isMuted(state.active.id);
   items.unshift({ icon: silenced ? "bell" : "bellOff", label: t(silenced ? "mute.unmute" : "mute.action"), fn: () => muteFlow(state.active.id) });
+  items.push({ icon: "trash", label: t("chat.delete"), fn: () => deleteConversation(state.active?.id), danger: true });
   chatMenu.replaceChildren(...items.map(it => {
     const b = el("button", "mi" + (it.danger ? " danger" : ""));
     b.setAttribute("role", "menuitem");
