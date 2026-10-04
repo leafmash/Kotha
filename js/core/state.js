@@ -6,6 +6,8 @@ export const state = {
   pendingName: "",
   blocked: new Set(),
   blockedReady: false,
+  cleared: new Map(),
+  clearedReady: false,
   deleting: false,
   muted: {},
   callDocs: new Map(),
