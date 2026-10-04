@@ -1,7 +1,7 @@
 import { t } from "../i18n.js";
 
-const CLOUD_NAME = "YOUR_CLOUDINARY_CLOUD_NAME";
-const UPLOAD_PRESET = "YOUR_UNSIGNED_UPLOAD_PRESET";
+const CLOUD_NAME = "xreqa1wz";
+const UPLOAD_PRESET = "CovaMsg";
 
 export async function upload(file) {
   const fd = new FormData();
