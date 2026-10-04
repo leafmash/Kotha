@@ -137,6 +137,7 @@ export const en = {
   "note.saved": "Note shared for 24 hours",
   "note.removed": "Note removed",
   "note.fail": "Could not update note",
+  "note.close": "Close",
   "group.findContact": "Find a contact by email",
   "group.yourContacts": "Your contacts",
   "group.noContacts": "Add contacts first by finding them by email in the box above.",

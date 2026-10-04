@@ -136,6 +136,7 @@ export const bn = {
   "note.add": "নোট দিন",
   "note.saved": "নোট ২৪ ঘণ্টার জন্য শেয়ার হয়েছে",
   "note.removed": "নোট মুছে ফেলা হয়েছে",
+  "note.close": "বন্ধ করুন",
   "note.fail": "নোট আপডেট করা যায়নি",
   "group.findContact": "ইমেইল দিয়ে কন্টাক্ট খুঁজুন",
   "group.yourContacts": "আপনার কন্টাক্ট",
