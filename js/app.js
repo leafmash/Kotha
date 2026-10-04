@@ -38,6 +38,7 @@ import { initBlockedList } from "./features/settings/blocked-list.js";
 import { initDeleteAccount } from "./features/auth/delete-account.js";
 import { initTerms } from "./features/auth/terms.js";
 import { initCalls } from "./features/calls/calls.js";
+import { initNoteView } from "./features/chat-list/note-view.js";
 import { initNativeBridge } from "./features/native/native-bridge.js";
 
 initDialogs();
@@ -81,3 +82,4 @@ initDeleteAccount();
 initTerms();
 initCalls();
 initNativeBridge();
+initNoteView();
