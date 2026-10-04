@@ -1,4 +1,4 @@
-const CACHE = "cova-v49";
+const CACHE = "cova-v50";
 const SHELL = [
   "./",
   "index.html",
@@ -29,6 +29,7 @@ const SHELL = [
   "js/features/calls/call-history.js",
   "js/features/calls/calls.js",
   "js/features/chat-list/chat-list.js",
+  "js/features/chat-list/note-view.js",
   "js/features/chat-list/notes.js",
   "js/features/chat-list/row.js",
   "js/features/chat/attachments.js",

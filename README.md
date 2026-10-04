@@ -40,7 +40,7 @@ Firebase (Auth + Firestore + Cloud Messaging) ও Cloudinary ভিত্তি�
 | `js/features/profile/` | `profile`, `user-profile`, `edit-profile`, `avatar` |
 | `js/features/settings/` | `settings`, `blocked-list` |
 | `js/features/block/`, `report/` | ব্লক/আনব্লক, রিপোর্ট |
-| `js/features/chat-list/` | `chat-list` (তালিকা, ফিল্টার), `row`, `notes` (সক্রিয় স্ট্রিপ ও নোট) |
+| `js/features/chat-list/` | `chat-list` (তালিকা, ফিল্টার), `row`, `notes` (সক্রিয় স্ট্রিপ ও নোট), `note-view` (নোট ক্লিক করলে পুরো নোট) |
 | `js/features/chat/` | `chat-session` (খোলা/বন্ধ), `header`, `message-list`, `message-actions`, `message-menu`, `gestures`, `reply`, `forward`, `composer`, `send`, `outbox`, `emoji`, `attachments`, `voice-recorder`, `media-viewer`, `reactions`, `scroll`, `chat-menu`, `mute`, `read-state`, `peer`, `clear-chat` (কনভার্সেশন ডিলিট), `cleared` |
 | `js/features/groups/` | `group-create`, `group-admin`, `group-info`, `group-leave` |
 | `js/features/calls/` | `calls` (কল সিস্টেম চালু করা), `call-history` (কল তালিকা) |
