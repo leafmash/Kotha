@@ -20,6 +20,7 @@ import { closeReport } from "../report/report.js";
 import { closeBlocked } from "../settings/blocked-list.js";
 import { closeSettings } from "../settings/settings.js";
 import { closeChoice, closeConfirm, closeEdit } from "../../ui/dialogs.js";
+import { initEdgeSwipe } from "../../ui/edge-swipe.js";
 import { closeMore, moreMenu } from "../../ui/more-menu.js";
 import { toast } from "../../ui/toast.js";
 
@@ -27,27 +28,43 @@ const openChatFromNative = id => {
   if (id && !openChatById(id)) state.pendingChat = id;
 };
 
+const mobileLayout = () => !matchMedia("(min-width:901px) and (pointer:fine)").matches;
+
+const byId = id => () => $(id);
+
+const hideNode = id => () => { $(id).hidden = true; };
+
+const layers = [
+  { node: byId("termsGate") },
+  { node: byId("deleteBox"), close: closeDelete },
+  { node: byId("reportBox"), close: closeReport },
+  { node: byId("confirm"), close: () => closeConfirm(false) },
+  { node: byId("choice"), close: () => closeChoice(null) },
+  { node: byId("editBox"), close: () => closeEdit(null) },
+  { node: () => chatMenu, close: closeChatMenu },
+  { node: byId("userSheet"), close: closeUserProfile, drag: true },
+  { node: byId("editProfileSheet"), close: closeEditProfile, drag: true },
+  { node: byId("blockedSheet"), close: closeBlocked, drag: true },
+  { node: byId("profileSheet"), close: closeProfile, drag: true },
+  { node: byId("settingsSheet"), close: closeSettings, drag: true },
+  { node: byId("msgMenu"), close: closeMenu },
+  { node: () => moreMenu, close: closeMore },
+  { node: byId("forwardSheet"), close: closeForward, drag: true },
+  { node: byId("lightbox"), close: hideNode("lightbox") },
+  { node: byId("findSheet"), close: closeFind, drag: true },
+  { node: byId("sheet"), close: hideNode("sheet"), drag: true },
+  { node: byId("infoSheet"), close: hideNode("infoSheet"), drag: true },
+  { node: byId("emojiPanel"), close: hideNode("emojiPanel") }
+];
+
+const topLayer = () => layers.find(layer => !layer.node().hidden);
+
 const handleBack = () => {
-  if (!$("termsGate").hidden) return true;
-  if (!$("deleteBox").hidden) { closeDelete(); return true; }
-  if (!$("reportBox").hidden) { closeReport(); return true; }
-  if (!$("confirm").hidden) { closeConfirm(false); return true; }
-  if (!$("choice").hidden) { closeChoice(null); return true; }
-  if (!$("editBox").hidden) { closeEdit(null); return true; }
-  if (!chatMenu.hidden) { closeChatMenu(); return true; }
-  if (!$("userSheet").hidden) { closeUserProfile(); return true; }
-  if (!$("editProfileSheet").hidden) { closeEditProfile(); return true; }
-  if (!$("blockedSheet").hidden) { closeBlocked(); return true; }
-  if (!$("profileSheet").hidden) { closeProfile(); return true; }
-  if (!$("settingsSheet").hidden) { closeSettings(); return true; }
-  if (!$("msgMenu").hidden) { closeMenu(); return true; }
-  if (!moreMenu.hidden) { closeMore(); return true; }
-  if (!$("forwardSheet").hidden) { closeForward(); return true; }
-  if (!$("lightbox").hidden) { $("lightbox").hidden = true; return true; }
-  if (!$("findSheet").hidden) { closeFind(); return true; }
-  if (!$("sheet").hidden) { $("sheet").hidden = true; return true; }
-  if (!$("infoSheet").hidden) { $("infoSheet").hidden = true; return true; }
-  if (!$("emojiPanel").hidden) { $("emojiPanel").hidden = true; return true; }
+  const layer = topLayer();
+  if (layer) {
+    layer.close?.();
+    return true;
+  }
   const callState = calls.busy();
   if (callState) {
     toast(callState === "in" ? t("nav.answerOrDecline") : t("nav.callInProgress"));
@@ -56,6 +73,13 @@ const handleBack = () => {
   if (!$("replyBar").hidden) { clearReply(); return true; }
   if (state.active) { closeChat(); renderList(); return true; }
   return false;
+};
+
+const swipeTarget = () => {
+  const layer = topLayer();
+  if (layer) return layer.drag ? { node: layer.node(), close: layer.close } : null;
+  if (!state.active || !mobileLayout() || calls.busy() || !$("replyBar").hidden) return null;
+  return { node: $("chat"), close: () => { closeChat(true); renderList(); } };
 };
 
 export function initNativeBridge() {
@@ -69,4 +93,5 @@ export function initNativeBridge() {
     onResume: () => setActiveChat(state.active?.id || null)
   });
   consumePendingChat().then(openChatFromNative);
+  initEdgeSwipe(swipeTarget);
 }
