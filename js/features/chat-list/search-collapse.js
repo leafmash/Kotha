@@ -21,8 +21,7 @@ export function initSearchCollapse() {
 
   let geo = null;
   let frame = 0;
-  let forced = false;
-  let settleTimer = 0;
+  let lastTop = 0;
 
   const measure = () => {
     const sb = sidebar.getBoundingClientRect();
@@ -48,42 +47,30 @@ export function initSearchCollapse() {
     frame = 0;
     if (!geo) return;
     const st = scroller.scrollTop;
-    const p = forced ? 0 : clamp(st / geo.range);
+    const p = clamp(st / geo.range);
     const s = smooth(clamp(p / SHAPE_END));
-    const top = forced ? geo.fullTop - st : Math.max(geo.miniTop, geo.fullTop - st);
+    const top = Math.max(geo.miniTop, geo.fullTop - st);
     const left = lerp(geo.side, geo.miniLeft, s);
     box.style.transform = `translate3d(${left}px,${top}px,0)`;
     box.style.width = lerp(geo.fullW, MINI, s) + "px";
     box.style.height = lerp(FULL_H, MINI, s) + "px";
-    box.style.zIndex = forced ? 3 : 5;
     icon.style.left = lerp(16, (MINI - ICON) / 2, s) + "px";
     box.style.setProperty("--bgo", clamp(1 - s * 1.6));
     input.style.opacity = clamp(1 - s * 2.4);
-    box.classList.toggle("mini", s > 0.98);
+    const mini = s > 0.98;
+    box.classList.toggle("mini", mini);
+    if (mini && st > lastTop && document.activeElement === input) input.blur();
+    lastTop = st;
   };
 
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(apply);
   };
 
-  const setForced = value => {
-    if (value === forced) return;
-    forced = value;
-    box.classList.add("settle");
-    clearTimeout(settleTimer);
-    settleTimer = setTimeout(() => box.classList.remove("settle"), 320);
-    apply();
-  };
-
-  const syncForced = () => setForced(document.activeElement === input || !!input.value.trim());
-
   scroller.addEventListener("scroll", schedule, { passive: true });
   input.addEventListener("focus", () => {
-    scroller.scrollTo({ top: 0 });
-    syncForced();
+    if (scroller.scrollTop > 0) scroller.scrollTo({ top: 0, behavior: "smooth" });
   });
-  input.addEventListener("blur", syncForced);
-  input.addEventListener("input", syncForced);
   box.addEventListener("click", () => {
     if (box.classList.contains("mini")) input.focus({ preventScroll: true });
     else if (document.activeElement !== input) input.focus();
