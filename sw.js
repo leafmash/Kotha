@@ -1,4 +1,4 @@
-const CACHE = "cova-v50";
+const CACHE = "cova-v52";
 const SHELL = [
   "./",
   "index.html",
@@ -75,11 +75,14 @@ const SHELL = [
   "js/features/settings/blocked-list.js",
   "js/features/settings/settings.js",
   "js/ui/dialogs.js",
+  "js/ui/edge-swipe.js",
+  "js/ui/haptics.js",
   "js/ui/keyboard.js",
   "js/ui/more-menu.js",
   "js/ui/splash.js",
   "js/ui/theme.js",
   "js/ui/toast.js",
+  "js/ui/transitions.js",
   "icon.svg",
   "icon-192.png"
 ];
