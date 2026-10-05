@@ -19,6 +19,12 @@ const SPLASH_LIMIT_MS = 6000;
 const UPDATE_WAIT_MS = 1500;
 const BATTERY_KEY = "kotha-battery-prompted";
 
+const HAPTIC_GAP_MS = 35;
+const IMPACT_STYLE = { tap: "LIGHT", select: "LIGHT", press: "MEDIUM" };
+const NOTE_TYPE = { success: "SUCCESS", warning: "WARNING", error: "ERROR" };
+const VIBRATE_MS = { tap: 8, select: 6, press: 14, success: [10, 40, 10], warning: [20, 40, 20], error: [30, 50, 30] };
+
+let lastHaptic = 0;
 let exitArmed = false;
 let exitTimer = null;
 let splashHidden = false;
@@ -26,6 +32,20 @@ let updateCheck = Promise.resolve(false);
 let pushWired = false;
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+export function haptic(kind = "tap") {
+  const now = Date.now();
+  if (now - lastHaptic < HAPTIC_GAP_MS) return;
+  lastHaptic = now;
+  if (Haptics) {
+    const run = NOTE_TYPE[kind]
+      ? Haptics.notification({ type: NOTE_TYPE[kind] })
+      : Haptics.impact({ style: IMPACT_STYLE[kind] || "LIGHT" });
+    run?.catch?.(() => {});
+    return;
+  }
+  if (navigator.vibrate) navigator.vibrate(VIBRATE_MS[kind] ?? 8);
+}
 
 export async function hideNativeSplash() {
   if (!SplashScreen || splashHidden) return;
@@ -138,8 +158,31 @@ export async function consumePendingChat() {
   return chatId || null;
 }
 
+function setupWebBack(handleBack) {
+  let armed = false;
+  const arm = () => {
+    if (armed) return;
+    armed = true;
+    history.pushState({ kothaBack: true }, "", location.href);
+  };
+  window.addEventListener("popstate", () => {
+    armed = false;
+    if (handleBack()) {
+      arm();
+      return;
+    }
+    history.back();
+  });
+  document.addEventListener("pointerup", arm, true);
+  document.addEventListener("keydown", arm, true);
+  arm();
+}
+
 export function setupNative({ db, getDoc, doc, handleBack, openChat, notify, onResume }) {
-  if (!isNative) return;
+  if (!isNative) {
+    setupWebBack(handleBack);
+    return;
+  }
 
   applyStatusBar(document.documentElement.dataset.theme !== "light");
   setTimeout(hideNativeSplash, SPLASH_LIMIT_MS);
@@ -158,7 +201,7 @@ export function setupNative({ db, getDoc, doc, handleBack, openChat, notify, onR
       return;
     }
     exitArmed = true;
-    if (Haptics) Haptics.notification({ type: "WARNING" }).catch(() => {});
+    haptic("warning");
     notify(t("native.exitAgain"));
     clearTimeout(exitTimer);
     exitTimer = setTimeout(() => {
