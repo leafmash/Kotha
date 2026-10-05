@@ -2,7 +2,7 @@ import { $ } from "../../core/dom.js";
 
 const FULL_H = 48;
 const MINI = 44;
-const ICON = 22;
+const ICON = 24;
 const SHAPE_END = 0.8;
 
 const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
@@ -57,6 +57,7 @@ export function initSearchCollapse() {
     box.style.height = lerp(FULL_H, MINI, s) + "px";
     box.style.zIndex = forced ? 3 : 5;
     icon.style.left = lerp(16, (MINI - ICON) / 2, s) + "px";
+    box.style.setProperty("--bgo", clamp(1 - s * 1.6));
     input.style.opacity = clamp(1 - s * 2.4);
     box.classList.toggle("mini", s > 0.98);
   };
