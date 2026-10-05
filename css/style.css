@@ -56,7 +56,6 @@ svg .fill{fill:currentColor}
 .sbox input::placeholder{color:var(--muted)}
 .sbox .sico{position:absolute;top:50%;left:0;width:24px;height:24px;margin-top:-12px;fill:none;stroke:var(--muted);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
 .sbox.mini .sico{stroke:var(--accent)}
-.sbox.settle{transition:width .28s cubic-bezier(.3,.9,.3,1),height .28s cubic-bezier(.3,.9,.3,1),transform .28s cubic-bezier(.3,.9,.3,1),box-shadow .15s}
 #activeStrip{display:flex;align-items:flex-end;gap:4px;overflow-x:auto;overflow-y:hidden;padding:8px 10px 10px;height:146px;box-sizing:border-box;scrollbar-width:none;flex:none;overscroll-behavior-x:contain}
 #activeStrip::-webkit-scrollbar{display:none}
 .sitem{flex:none;width:84px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;padding:0;cursor:pointer}
