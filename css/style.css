@@ -633,3 +633,19 @@ div.pavatar:active img{opacity:1}
 #noteView .dbtns button:active{transform:scale(.97)}
 #noteView .dmsg{background:var(--accent);color:#fff}
 #noteView .dcancel{background:var(--fill);color:var(--text)}
+
+#choice.neutral .dicon{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+.dbtns .dplain{background:var(--fill);color:var(--text)}
+.dbtns .dsoft.dplain{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
+.row .sub .dtag{color:var(--danger);font-weight:600}
+.row .pinic{color:var(--muted);flex:none}
+.row .pinic svg{width:15px;height:15px}
+.row .sub~.pinic{margin-left:auto}
+.row .muteic~.pinic{margin-left:0}
+.chips button.has::after{content:"";display:inline-block;width:7px;height:7px;margin-left:6px;border-radius:50%;background:var(--accent);vertical-align:middle}
+.chips button.on.has::after{background:#fff}
+#listScroll>.chips{position:sticky;top:0;z-index:2;background:var(--panel);padding-top:6px;transition:transform .22s cubic-bezier(.3,.9,.3,1)}
+#listScroll>.chips.away{transform:translateY(-120%)}
+.sbox .sdot{position:absolute;top:9px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--panel);opacity:0;transition:opacity .15s;pointer-events:none}
+.sbox.mini.has-term .sdot{opacity:1}
+.appbrand{cursor:pointer}
