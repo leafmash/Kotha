@@ -138,6 +138,8 @@ export function initSession() {
     }));
     state.unsubs.push(onSnapshot(doc(db, "pushTokens", user.uid), s => {
       state.muted = s.exists() ? s.data().muted || {} : {};
+      state.pinned = s.exists() ? s.data().pinned || {} : {};
+      state.archived = s.exists() ? s.data().archived || {} : {};
       renderList();
       if (!chatMenu.hidden) openChatMenu();
     }, () => {}));
