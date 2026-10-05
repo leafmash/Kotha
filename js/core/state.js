@@ -10,6 +10,8 @@ export const state = {
   clearedReady: false,
   deleting: false,
   muted: {},
+  pinned: {},
+  archived: {},
   callDocs: new Map(),
   callHistoryOn: false,
   chatsReady: false,
