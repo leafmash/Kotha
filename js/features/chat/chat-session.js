@@ -13,13 +13,28 @@ import { clearReply } from "./reply.js";
 import { watchUser } from "../contacts/user-watch.js";
 import { closeUserProfile } from "../profile/user-profile.js";
 
+const mobileLayout = () => !matchMedia("(min-width:901px) and (pointer:fine)").matches;
+
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const PANE_EXIT_MS = 320;
+
+let paneTimer = 0;
+
+const hidePane = () => {
+  clearTimeout(paneTimer);
+  if (state.active) return;
+  $("pane").hidden = true;
+  $("empty").hidden = false;
+};
+
 let chatUnsubs = [];
 
 let msgUnsub = null;
 
 const drafts = new Map();
 
-export function closeChat() {
+export function closeChat(instant = false) {
   if (state.active) drafts.set(state.active.id, input.value);
   msgUnsub?.();
   msgUnsub = null;
@@ -30,9 +45,13 @@ export function closeChat() {
   closeUserProfile();
   $("infoSheet").hidden = true;
   $("editBox").hidden = true;
-  $("pane").hidden = true;
-  $("empty").hidden = false;
   $("app").classList.remove("in-chat");
+  clearTimeout(paneTimer);
+  if (instant || !mobileLayout() || reducedMotion()) {
+    hidePane();
+    return;
+  }
+  paneTimer = setTimeout(hidePane, PANE_EXIT_MS);
 }
 
 export async function openChat(peer, group) {
@@ -47,6 +66,7 @@ export async function openChat(peer, group) {
   if (!group && !state.chats.some(c => c.id === id)) await setDoc(ref, { members: [uid, peer.uid] }, { merge: true });
   goneCache.clear();
   state.active = { id, peer: group ? null : peer.uid, group: !!group, members: group ? group.members : [uid, peer.uid], reply: null, data: group || null, first: true, lastId: null, limit: PAGE, hasMore: false, olderLoad: false };
+  clearTimeout(paneTimer);
   setActiveChat(id);
   if (!group) watchUser(peer.uid);
   $("empty").hidden = true;

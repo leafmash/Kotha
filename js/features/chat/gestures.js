@@ -1,6 +1,7 @@
 import { el } from "../../core/dom.js";
 import { icon } from "../../core/icons.js";
 import { preview } from "../../core/message-format.js";
+import { haptic } from "../../native.js";
 import { menuBox, openMenu } from "./message-menu.js";
 import { setReply } from "./reply.js";
 
@@ -8,7 +9,7 @@ export function attachGestures(b, d, m, mine) {
   const ico = el("div", "swipe-ico");
   ico.append(icon("reply"));
   b.append(ico);
-  let sx = 0, sy = 0, dx = 0, timer = null, swiping = false, tracking = false, fired = false;
+  let sx = 0, sy = 0, dx = 0, timer = null, swiping = false, tracking = false, fired = false, armed = false;
   const cancelPress = () => { clearTimeout(timer); timer = null; };
   const reset = () => {
     b.style.transition = "transform .2s";
@@ -19,7 +20,7 @@ export function attachGestures(b, d, m, mine) {
   const show = () => {
     cancelPress();
     fired = true;
-    if (navigator.vibrate) navigator.vibrate(12);
+    haptic("press");
     openMenu(d, m, mine);
   };
   b.addEventListener("pointerdown", e => {
@@ -27,6 +28,7 @@ export function attachGestures(b, d, m, mine) {
     tracking = true;
     swiping = false;
     fired = false;
+    armed = false;
     sx = e.clientX;
     sy = e.clientY;
     dx = 0;
@@ -45,6 +47,10 @@ export function attachGestures(b, d, m, mine) {
     b.style.transform = `translateX(${dx * dir}px)`;
     ico.style.opacity = Math.min(1, dx / 60);
     ico.classList.toggle("ready", dx >= 60);
+    if ((dx >= 60) !== armed) {
+      armed = dx >= 60;
+      haptic("select");
+    }
   });
   const end = () => {
     if (!tracking) return;
@@ -52,7 +58,7 @@ export function attachGestures(b, d, m, mine) {
     cancelPress();
     if (swiping) {
       if (dx >= 60) {
-        if (navigator.vibrate) navigator.vibrate(10);
+        haptic("tap");
         setReply(preview(m), d.id);
       }
       swiping = false;

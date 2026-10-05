@@ -3,6 +3,7 @@ import { t } from "../../i18n.js";
 import { state } from "../../core/state.js";
 import { $, input } from "../../core/dom.js";
 import { auth, db } from "../../core/firebase.js";
+import { haptic } from "../../native.js";
 import { send } from "./send.js";
 import { toast } from "../../ui/toast.js";
 
@@ -26,6 +27,7 @@ const setTyping = value => {
 async function submitText() {
   const text = input.value.trim();
   if (!text || !state.active) return;
+  haptic("tap");
   input.value = "";
   syncComposer();
   clearTimeout(typingTimer);
