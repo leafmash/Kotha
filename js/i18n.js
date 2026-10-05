@@ -61,7 +61,10 @@ export const displayStored = value => {
 
 export const applyStatic = (root = document) => {
   root.querySelectorAll("[data-i18n]").forEach(n => { n.textContent = t(n.dataset.i18n); });
-  root.querySelectorAll("[data-i18n-title]").forEach(n => { n.title = t(n.dataset.i18nTitle); });
+  root.querySelectorAll("[data-i18n-title]").forEach(n => {
+    n.title = t(n.dataset.i18nTitle);
+    if (!n.textContent.trim() && !n.dataset.i18nAria) n.setAttribute("aria-label", n.title);
+  });
   root.querySelectorAll("[data-i18n-placeholder]").forEach(n => { n.placeholder = t(n.dataset.i18nPlaceholder); });
   root.querySelectorAll("[data-i18n-aria]").forEach(n => { n.setAttribute("aria-label", t(n.dataset.i18nAria)); });
   document.documentElement.lang = lang;
