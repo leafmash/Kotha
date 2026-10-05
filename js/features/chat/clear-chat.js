@@ -1,5 +1,5 @@
 import { collection, doc, onSnapshot, serverTimestamp, setDoc } from "../../core/sdk.js";
-import { t } from "../../i18n.js";
+import { fmtNumber, t } from "../../i18n.js";
 import { state } from "../../core/state.js";
 import { auth, db } from "../../core/firebase.js";
 import { renderList } from "../chat-list/chat-list.js";
@@ -26,20 +26,28 @@ export function watchCleared(uid, onChange) {
   });
 }
 
-export async function deleteConversation(id) {
+export async function deleteConversations(ids) {
   const uid = auth.currentUser?.uid;
-  if (!uid || !id || state.deleting) return;
-  const chat = state.chats.find(c => c.id === id);
-  const ok = await askConfirm({ title: t("chat.deleteTitle"), text: t("chat.deleteText"), ok: t("chat.delete"), iconName: "trash" });
-  if (!ok) return;
-  const hadUnread = chat ? unreadOf(chat, uid) > 0 : false;
-  if (state.active?.id === id) closeChat();
-  try {
-    await setDoc(doc(db, "users", uid, "clears", id), { at: serverTimestamp() });
-    if (hadUnread) setDoc(doc(db, "chats", id), { unread: { [uid]: 0 }, readAt: { [uid]: serverTimestamp() } }, { merge: true }).catch(() => {});
-    toast(t("chat.convDeleted"));
-  } catch {
-    toast(t("chat.deleteFail"));
-  }
+  if (!uid || !ids.length || state.deleting) return false;
+  const many = ids.length > 1;
+  const ok = await askConfirm({
+    title: t(many ? "chat.deleteManyTitle" : "chat.deleteTitle", { n: fmtNumber(ids.length) }),
+    text: t(many ? "chat.deleteManyText" : "chat.deleteText"),
+    ok: t("chat.delete"),
+    iconName: "trash"
+  });
+  if (!ok) return false;
+  if (state.active && ids.includes(state.active.id)) closeChat();
+  const results = await Promise.allSettled(ids.map(id => setDoc(doc(db, "users", uid, "clears", id), { at: serverTimestamp() })));
+  ids.forEach((id, i) => {
+    if (results[i].status !== "fulfilled") return;
+    const chat = state.chats.find(c => c.id === id);
+    if (chat && unreadOf(chat, uid) > 0) setDoc(doc(db, "chats", id), { unread: { [uid]: 0 }, readAt: { [uid]: serverTimestamp() } }, { merge: true }).catch(() => {});
+  });
+  const failed = results.filter(r => r.status === "rejected").length;
+  toast(t(failed ? "chat.deleteFail" : many ? "chat.manyDeleted" : "chat.convDeleted", { n: fmtNumber(ids.length) }));
   renderList();
+  return failed < ids.length;
 }
+
+export const deleteConversation = id => deleteConversations([id]);

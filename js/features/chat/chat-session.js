@@ -10,6 +10,7 @@ import { renderPeer } from "./header.js";
 import { goneCache, renderMessages } from "./message-list.js";
 import { markRead } from "./read-state.js";
 import { clearReply } from "./reply.js";
+import { stopVoice } from "./voice-player.js";
 import { watchUser } from "../contacts/user-watch.js";
 import { closeUserProfile } from "../profile/user-profile.js";
 
@@ -37,6 +38,7 @@ const drafts = new Map();
 export const draftOf = id => (drafts.get(id) || "").trim();
 
 export function closeChat(instant = false) {
+  stopVoice();
   if (state.active) drafts.set(state.active.id, input.value);
   msgUnsub?.();
   msgUnsub = null;

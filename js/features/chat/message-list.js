@@ -11,6 +11,7 @@ import { calls } from "../calls/calls.js";
 import { messageCleared } from "./cleared.js";
 import { attachGestures } from "./gestures.js";
 import { clearReply } from "./reply.js";
+import { createVoicePlayer } from "./voice-player.js";
 import { sysText } from "../groups/group-admin.js";
 import { openUserProfile } from "../profile/user-profile.js";
 
@@ -132,10 +133,7 @@ export function renderMessages(all) {
       v.preload = "metadata";
       b.append(v);
     } else if (m.type === "audio") {
-      const a = el("audio");
-      a.src = m.url;
-      a.controls = true;
-      b.append(a);
+      b.append(createVoicePlayer(d.id, m));
     } else if (m.type === "file") {
       const a = el("a", "file");
       a.append(icon("clip"), " " + (m.name || t("common.file")));

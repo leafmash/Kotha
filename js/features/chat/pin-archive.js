@@ -3,10 +3,7 @@ import { t } from "../../i18n.js";
 import { state } from "../../core/state.js";
 import { auth, db } from "../../core/firebase.js";
 import { renderList } from "../chat-list/chat-list.js";
-import { askChoice } from "../../ui/dialogs.js";
 import { toast } from "../../ui/toast.js";
-import { deleteConversation } from "./clear-chat.js";
-import { isMuted, muteFlow } from "./mute.js";
 
 const MAX_PINNED = 3;
 
@@ -57,23 +54,49 @@ export function toggleArchive(id) {
   else commit(id, false, true, "archive.done", "archive.fail");
 }
 
-export async function openRowMenu(id, title) {
-  if (!id) return;
-  const choice = await askChoice({
-    title: title || t("common.chats"),
-    text: t("rowmenu.text"),
-    iconName: "pin",
-    neutral: true,
-    options: [
-      { label: t(isPinned(id) ? "pin.undo" : "pin.action"), value: "pin", kind: "dplain" },
-      { label: t(isArchived(id) ? "archive.undo" : "archive.action"), value: "archive", kind: "dplain" },
-      { label: t(isMuted(id) ? "mute.unmute" : "mute.action"), value: "mute", kind: "dplain" },
-      { label: t("chat.delete"), value: "delete", kind: "dsoft dplain" },
-      { label: t("common.cancel"), value: null, kind: "dcancel" }
-    ]
+async function applyMany(ids, next, doneKey, failKey) {
+  if (!ids.length || !auth.currentUser) return false;
+  const before = { pinned: state.pinned, archived: state.archived };
+  const now = Date.now();
+  const pinned = { ...state.pinned };
+  const archived = { ...state.archived };
+  const pinPatch = {};
+  const archivePatch = {};
+  ids.forEach(id => {
+    const n = next(id);
+    if (n.pinned) pinned[id] = now;
+    else delete pinned[id];
+    if (n.archived) archived[id] = now;
+    else delete archived[id];
+    pinPatch[id] = n.pinned ? now : deleteField();
+    archivePatch[id] = n.archived ? now : deleteField();
   });
-  if (choice === "pin") togglePin(id);
-  else if (choice === "archive") toggleArchive(id);
-  else if (choice === "mute") muteFlow(id);
-  else if (choice === "delete") deleteConversation(id);
+  state.pinned = pinned;
+  state.archived = archived;
+  renderList();
+  try {
+    await setDoc(doc(db, "pushTokens", auth.currentUser.uid), { pinned: pinPatch, archived: archivePatch }, { merge: true });
+    toast(t(doneKey));
+    return true;
+  } catch {
+    state.pinned = before.pinned;
+    state.archived = before.archived;
+    renderList();
+    toast(t(failKey));
+    return false;
+  }
+}
+
+export async function bulkPin(ids) {
+  const allPinned = ids.every(isPinned);
+  if (!allPinned && Object.keys(state.pinned).length + ids.filter(id => !isPinned(id)).length > MAX_PINNED) {
+    toast(t("pin.max"));
+    return false;
+  }
+  return applyMany(ids, id => ({ pinned: !allPinned, archived: allPinned ? isArchived(id) : false }), allPinned ? "pin.undone" : "pin.done", "pin.fail");
+}
+
+export async function bulkArchive(ids) {
+  const allArchived = ids.every(isArchived);
+  return applyMany(ids, id => ({ pinned: allArchived ? isPinned(id) : false, archived: !allArchived }), allArchived ? "archive.undone" : "archive.done", "archive.fail");
 }

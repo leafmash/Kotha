@@ -9,6 +9,7 @@ import { toast } from "../../ui/toast.js";
 
 let isTyping = false;
 let typingTimer;
+let keyboardWasOpen = false;
 
 export const syncComposer = () => {
   input.style.height = "auto";
@@ -27,9 +28,12 @@ const setTyping = value => {
 async function submitText() {
   const text = input.value.trim();
   if (!text || !state.active) return;
+  const restoreFocus = keyboardWasOpen;
+  keyboardWasOpen = false;
   haptic("tap");
   input.value = "";
   syncComposer();
+  if (restoreFocus && document.activeElement !== input) input.focus({ preventScroll: true });
   clearTimeout(typingTimer);
   isTyping = false;
   try {
@@ -49,9 +53,20 @@ export function initComposer() {
   input.onkeydown = e => {
     if (e.key === "Enter" && !e.shiftKey && !matchMedia("(pointer:coarse)").matches) {
       e.preventDefault();
+      keyboardWasOpen = true;
       submitText();
     }
   };
-  $("sendBtn").onclick = submitText;
+  const sendBtn = $("sendBtn");
+  const holdFocus = e => {
+    keyboardWasOpen = document.activeElement === input;
+    e.preventDefault();
+  };
+  sendBtn.addEventListener("pointerdown", e => {
+    keyboardWasOpen = document.activeElement === input;
+    if (e.pointerType === "mouse") e.preventDefault();
+  });
+  sendBtn.addEventListener("mousedown", holdFocus);
+  sendBtn.addEventListener("click", submitText);
   syncComposer();
 }

@@ -11,28 +11,32 @@ export const isMuted = id => (Number(state.muted[id]) || 0) > Date.now();
 
 const pushRef = () => doc(db, "pushTokens", auth.currentUser.uid);
 
-async function setMute(id, until) {
+async function setMuteMany(ids, until) {
   const previous = state.muted;
-  state.muted = { ...state.muted };
-  if (until) state.muted[id] = until;
-  else delete state.muted[id];
+  const next = { ...state.muted };
+  const patch = {};
+  ids.forEach(id => {
+    if (until) next[id] = until;
+    else delete next[id];
+    patch[id] = until || deleteField();
+  });
+  state.muted = next;
   renderList();
   try {
-    await setDoc(pushRef(), { muted: { [id]: until || deleteField() } }, { merge: true });
+    await setDoc(pushRef(), { muted: patch }, { merge: true });
     toast(t(until ? "mute.done" : "mute.undone"));
+    return true;
   } catch {
     state.muted = previous;
     renderList();
     toast(t("mute.fail"));
+    return false;
   }
 }
 
-export async function muteFlow(id) {
-  if (!id || !auth.currentUser) return;
-  if (isMuted(id)) {
-    setMute(id, 0);
-    return;
-  }
+export async function muteMany(ids) {
+  if (!ids.length || !auth.currentUser) return false;
+  if (ids.every(isMuted)) return setMuteMany(ids, 0);
   const spans = [8 * 3600000, 7 * 24 * 3600000, 0];
   const choice = await askChoice({
     title: t("mute.title"),
@@ -45,7 +49,9 @@ export async function muteFlow(id) {
       { label: t("common.cancel"), value: null, kind: "dcancel" }
     ]
   });
-  if (!choice) return;
+  if (!choice) return false;
   const span = spans[choice - 1];
-  setMute(id, span ? Date.now() + span : FOREVER);
+  return setMuteMany(ids, span ? Date.now() + span : FOREVER);
 }
+
+export const muteFlow = id => muteMany([id]);
