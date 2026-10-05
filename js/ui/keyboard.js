@@ -1,6 +1,7 @@
 import { state } from "../core/state.js";
 import { $ } from "../core/dom.js";
 import { closeDelete } from "../features/auth/delete-account.js";
+import { exitSelect, isSelecting } from "../features/chat-list/selection.js";
 import { closeChatMenu } from "../features/chat/chat-menu.js";
 import { closeChat } from "../features/chat/chat-session.js";
 import { closeForward } from "../features/chat/forward.js";
@@ -12,6 +13,7 @@ import { closeUserProfile } from "../features/profile/user-profile.js";
 import { closeReport } from "../features/report/report.js";
 import { closeBlocked } from "../features/settings/blocked-list.js";
 import { closeSettings } from "../features/settings/settings.js";
+import { closeActionSheet } from "./action-sheet.js";
 import { closeChoice, closeConfirm, closeEdit } from "./dialogs.js";
 import { closeMore } from "./more-menu.js";
 
@@ -24,6 +26,7 @@ export function initKeyboard() {
   addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
     closeConfirm(false);
+    closeActionSheet(null);
     closeChoice(null);
     closeEdit(null);
     closeMenu();
@@ -50,6 +53,7 @@ export function initKeyboard() {
     else if (!$("sheet").hidden) $("sheet").hidden = true;
     else if (!$("infoSheet").hidden) $("infoSheet").hidden = true;
     else if (!$("emojiPanel").hidden) $("emojiPanel").hidden = true;
+    else if (isSelecting()) exitSelect();
     else if (state.active) closeChat();
   });
 }
