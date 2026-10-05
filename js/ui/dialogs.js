@@ -29,8 +29,9 @@ export const closeChoice = value => {
   choiceDone = null;
   if (done) done(value);
 };
-export const askChoice = ({ title, text, iconName, options }) => new Promise(resolve => {
+export const askChoice = ({ title, text, iconName, options, neutral }) => new Promise(resolve => {
   closeChoice(null);
+  choiceBox.classList.toggle("neutral", !!neutral);
   $("choiceIcon").replaceChildren(icon(iconName));
   $("choiceTitle").textContent = title;
   $("choiceText").textContent = text;
