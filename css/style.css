@@ -30,7 +30,7 @@ svg .fill{fill:currentColor}
 
 #app{position:fixed;top:0;bottom:0;left:0;right:0;margin:0 auto;width:min(100%,720px);overflow:hidden;background:var(--panel)}
 @media(min-width:721px){#app{border-left:1px solid var(--sep);border-right:1px solid var(--sep)}}
-#sidebar{background:var(--panel);display:flex;flex-direction:column;min-height:0}
+#sidebar{background:var(--panel);display:flex;flex-direction:column;min-height:0;isolation:isolate}
 #sidebar,#chat{position:absolute;inset:0;width:100%}
 #sidebar>header{display:flex;align-items:center;justify-content:space-between;padding:8px 8px 8px 16px;padding-top:max(8px,env(safe-area-inset-top));min-height:56px}
 .appbrand{display:flex;align-items:center;gap:10px;min-width:0}
