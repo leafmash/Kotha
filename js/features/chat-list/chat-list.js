@@ -11,9 +11,9 @@ import { isCleared } from "../chat/cleared.js";
 import { renderStrip } from "./notes.js";
 import { initSearchCollapse } from "./search-collapse.js";
 import { row } from "./row.js";
-import { openChat } from "../chat/chat-session.js";
+import { draftOf, openChat } from "../chat/chat-session.js";
+import { isArchived, isPinned, openRowMenu } from "../chat/pin-archive.js";
 import { isMuted } from "../chat/mute.js";
-import { deleteConversation } from "../chat/clear-chat.js";
 import { peerIdOf } from "../chat/peer.js";
 import { unreadOf } from "../chat/read-state.js";
 import { openGroupSheet } from "../groups/group-create.js";
@@ -54,10 +54,16 @@ export function renderList() {
   }
 
   let count = 0;
+  const archivedView = state.filter === "archived";
+  const pinFirst = !term && !archivedView;
+  const draftFor = c => (state.active?.id === c.id ? "" : draftOf(c.id));
+  const archivedUnread = state.chats.some(c => c.lastMessage && !isCleared(c) && isArchived(c.id) && !isMuted(c.id) && unreadOf(c, uid) > 0);
+  $("chips").querySelector('[data-f="archived"]').classList.toggle("has", archivedUnread);
   [...state.chats]
     .filter(c => c.lastMessage && !isCleared(c))
-    .filter(c => state.filter === "all" || (state.filter === "group" ? c.group : unreadOf(c, uid) > 0))
-    .sort((a, b) => (b.lastAt?.seconds || 0) - (a.lastAt?.seconds || 0))
+    .filter(c => term || (archivedView ? isArchived(c.id) : !isArchived(c.id)))
+    .filter(c => state.filter === "all" || archivedView || (state.filter === "group" ? c.group : unreadOf(c, uid) > 0))
+    .sort((a, b) => (pinFirst ? Number(isPinned(b.id)) - Number(isPinned(a.id)) : 0) || (b.lastAt?.seconds || 0) - (a.lastAt?.seconds || 0))
     .forEach(c => {
       if (c.group) {
         if (!hit(c.name)) return;
@@ -67,7 +73,8 @@ export function renderList() {
         if (c.lastFrom === uid) who = t("list.youPrefix");
         else if (c.lastFrom && !hiddenLast) who = (state.users.get(c.lastFrom)?.name || "") + ": ";
         const last = hiddenLast ? t("block.hiddenMessage") : lastText(c.lastMessage);
-        list.append(row(g, who + last, listTime(c.lastAt), unreadOf(c, uid), () => openChat(null, c), state.active?.id === c.id, isMuted(c.id), () => deleteConversation(c.id)));
+        const draft = draftFor(c);
+        list.append(row(g, draft || who + last, listTime(c.lastAt), unreadOf(c, uid), () => openChat(null, c), state.active?.id === c.id, isMuted(c.id), () => openRowMenu(c.id, c.name), { pinned: isPinned(c.id), draft: !!draft }));
         count++;
         return;
       }
@@ -75,7 +82,8 @@ export function renderList() {
       const peer = state.users.get(peerId);
       if (!peer || state.blocked.has(peerId) || !hit(peer.name)) return;
       const sub = (c.lastFrom === uid ? t("list.youPrefix") : "") + lastText(c.lastMessage);
-      list.append(row(peer, sub, listTime(c.lastAt), unreadOf(c, uid), () => openChat(peer), state.active?.peer === peer.uid, isMuted(c.id), () => deleteConversation(c.id)));
+      const draft = draftFor(c);
+      list.append(row(peer, draft || sub, listTime(c.lastAt), unreadOf(c, uid), () => openChat(peer), state.active?.peer === peer.uid, isMuted(c.id), () => openRowMenu(c.id, peer.name), { pinned: isPinned(c.id), draft: !!draft }));
       count++;
     });
 
@@ -83,15 +91,25 @@ export function renderList() {
   let msg;
   if (term) msg = t("list.noMatch");
   else if (state.filter === "group") msg = t("list.noGroups");
+  else if (archivedView) msg = t("list.noArchived");
   else if (state.filter === "unread") msg = t("list.noUnread");
   else msg = t("list.noChats");
   list.append(el("p", "hint", msg));
 }
 
 function syncFilterUi() {
-  $("chips").querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.f === state.filter));
+  $("chips").querySelectorAll("button").forEach(x => {
+    const on = x.dataset.f === state.filter;
+    x.classList.toggle("on", on);
+    x.setAttribute("aria-pressed", String(on));
+  });
   document.querySelectorAll("#rail [data-f]").forEach(x => x.classList.toggle("on", x.dataset.f === state.filter));
-  document.querySelectorAll("#tabs [data-f]").forEach(x => x.classList.toggle("on", x.dataset.f === (state.filter === "group" || state.filter === "calls" ? state.filter : "all")));
+  document.querySelectorAll("#tabs [data-f]").forEach(x => {
+    const on = x.dataset.f === (state.filter === "group" || state.filter === "calls" ? state.filter : "all");
+    x.classList.toggle("on", on);
+    if (on) x.setAttribute("aria-current", "page");
+    else x.removeAttribute("aria-current");
+  });
   $("chips").hidden = state.filter === "group" || state.filter === "calls";
   if (state.filter === "calls") watchCallHistory();
 }

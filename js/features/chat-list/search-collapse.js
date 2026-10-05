@@ -22,6 +22,9 @@ export function initSearchCollapse() {
   let geo = null;
   let frame = 0;
   let lastTop = 0;
+  let dir = 0;
+  let anchor = 0;
+  const chips = $("chips");
 
   const measure = () => {
     const sb = sidebar.getBoundingClientRect();
@@ -37,7 +40,8 @@ export function initSearchCollapse() {
       fullTop,
       miniLeft: ad.left - sb.left - MINI,
       miniTop,
-      range: Math.max(1, fullTop - miniTop)
+      range: Math.max(1, fullTop - miniTop),
+      chipsTop: Math.max(0, list.offsetTop - chips.offsetHeight)
     };
     list.style.minHeight = Math.max(0, scroller.clientHeight + geo.range - list.offsetTop) + "px";
     apply();
@@ -60,6 +64,16 @@ export function initSearchCollapse() {
     const mini = s > 0.98;
     box.classList.toggle("mini", mini);
     if (mini && st > lastTop && document.activeElement === input) input.blur();
+    const move = st - lastTop;
+    if (move) {
+      const next = move > 0 ? 1 : -1;
+      if (next !== dir) {
+        dir = next;
+        anchor = lastTop;
+      }
+      if (st <= geo.chipsTop || (dir < 0 && anchor - st > 16)) chips.classList.remove("away");
+      else if (dir > 0 && st - anchor > 16) chips.classList.add("away");
+    }
     lastTop = st;
   };
 
@@ -68,6 +82,8 @@ export function initSearchCollapse() {
   };
 
   scroller.addEventListener("scroll", schedule, { passive: true });
+  input.addEventListener("input", () => box.classList.toggle("has-term", !!input.value.trim()));
+  document.querySelector("#sidebar .appbrand").addEventListener("click", () => scroller.scrollTo({ top: 0, behavior: "smooth" }));
   input.addEventListener("focus", () => {
     if (scroller.scrollTop > 0) scroller.scrollTo({ top: 0, behavior: "smooth" });
   });
