@@ -11,7 +11,6 @@ import { isCleared } from "../chat/cleared.js";
 import { renderStrip } from "./notes.js";
 import { initSearchCollapse } from "./search-collapse.js";
 import { row } from "./row.js";
-import { exitSelect, initSelection, reconcileSelection } from "./selection.js";
 import { draftOf, openChat } from "../chat/chat-session.js";
 import { isArchived, isPinned } from "../chat/pin-archive.js";
 import { isMuted } from "../chat/mute.js";
@@ -37,7 +36,6 @@ export function renderList() {
   $("tabBadge").textContent = totalUnread > 99 ? "99+" : totalUnread;
 
   if (state.filter === "calls") {
-    reconcileSelection([]);
     renderCalls(list, uid, hit);
     return;
   }
@@ -56,7 +54,6 @@ export function renderList() {
   }
 
   let count = 0;
-  const shown = [];
   const archivedView = state.filter === "archived";
   const pinFirst = !term && !archivedView;
   const draftFor = c => (state.active?.id === c.id ? "" : draftOf(c.id));
@@ -78,7 +75,6 @@ export function renderList() {
         const last = hiddenLast ? t("block.hiddenMessage") : lastText(c.lastMessage);
         const draft = draftFor(c);
         list.append(row(g, draft || who + last, listTime(c.lastAt), unreadOf(c, uid), () => openChat(null, c), state.active?.id === c.id, isMuted(c.id), { id: c.id, pinned: isPinned(c.id), draft: !!draft }));
-        shown.push(c.id);
         count++;
         return;
       }
@@ -88,11 +84,9 @@ export function renderList() {
       const sub = (c.lastFrom === uid ? t("list.youPrefix") : "") + lastText(c.lastMessage);
       const draft = draftFor(c);
       list.append(row(peer, draft || sub, listTime(c.lastAt), unreadOf(c, uid), () => openChat(peer), state.active?.peer === peer.uid, isMuted(c.id), { id: c.id, pinned: isPinned(c.id), draft: !!draft }));
-      shown.push(c.id);
       count++;
     });
 
-  reconcileSelection(shown);
   if (count) return;
   let msg;
   if (term) msg = t("list.noMatch");
@@ -104,7 +98,6 @@ export function renderList() {
 }
 
 function syncFilterUi() {
-  exitSelect();
   $("chips").querySelectorAll("button").forEach(x => {
     const on = x.dataset.f === state.filter;
     x.classList.toggle("on", on);
@@ -122,7 +115,6 @@ function syncFilterUi() {
 }
 
 export function initChatList() {
-  initSelection();
   initSearchCollapse();
   $("search").oninput = renderList;
   $("chips").onclick = e => {
