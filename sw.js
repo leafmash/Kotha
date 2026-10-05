@@ -1,4 +1,4 @@
-const CACHE = "cova-v52";
+const CACHE = "cova-v54";
 const SHELL = [
   "./",
   "index.html",
@@ -32,6 +32,7 @@ const SHELL = [
   "js/features/chat-list/note-view.js",
   "js/features/chat-list/notes.js",
   "js/features/chat-list/row.js",
+  "js/features/chat-list/search-collapse.js",
   "js/features/chat/attachments.js",
   "js/features/chat/chat-menu.js",
   "js/features/chat/clear-chat.js",
@@ -49,6 +50,7 @@ const SHELL = [
   "js/features/chat/mute.js",
   "js/features/chat/outbox.js",
   "js/features/chat/peer.js",
+  "js/features/chat/pin-archive.js",
   "js/features/chat/reactions.js",
   "js/features/chat/read-state.js",
   "js/features/chat/reply.js",
