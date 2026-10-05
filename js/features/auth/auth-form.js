@@ -12,6 +12,14 @@ import { askConfirm } from "../../ui/dialogs.js";
 
 let signup = false;
 
+const authMessage = (err, fallbackKey) => {
+  const key = "auth.err." + String(err?.code || "").replace("auth/", "");
+  const text = t(key);
+  return text === key ? t(fallbackKey) : text;
+};
+
+const isCancelled = err => /cancel|popup-closed/i.test((err?.code || "") + " " + (err?.message || ""));
+
 const setInfo = (text, bad) => {
   $("authInfo").textContent = text;
   $("authInfo").classList.toggle("bad", !!bad);
@@ -62,7 +70,7 @@ export function initAuthForm() {
         await signInWithEmailAndPassword(auth, email, password);
       }
     } catch (err) {
-      $("authErr").textContent = err.code.replace("auth/", "").replace(/-/g, " ");
+      $("authErr").textContent = authMessage(err, "auth.errGeneric");
       btn.disabled = false;
       btn.textContent = label;
     }
@@ -99,8 +107,7 @@ export function initAuthForm() {
         await signInWithPopup(auth, new GoogleAuthProvider());
       }
     } catch (err) {
-      const cancelled = /cancel/i.test(err.message || "");
-      $("authErr").textContent = cancelled ? "" : (err.code || t("auth.googleFail")).replace("auth/", "").replace(/-/g, " ");
+      $("authErr").textContent = isCancelled(err) ? "" : authMessage(err, "auth.googleFail");
     }
   };
 }
