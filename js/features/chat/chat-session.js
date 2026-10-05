@@ -34,6 +34,8 @@ let msgUnsub = null;
 
 const drafts = new Map();
 
+export const draftOf = id => (drafts.get(id) || "").trim();
+
 export function closeChat(instant = false) {
   if (state.active) drafts.set(state.active.id, input.value);
   msgUnsub?.();
@@ -42,6 +44,7 @@ export function closeChat(instant = false) {
   chatUnsubs = [];
   state.active = null;
   setActiveChat(null);
+  renderList();
   closeUserProfile();
   $("infoSheet").hidden = true;
   $("editBox").hidden = true;

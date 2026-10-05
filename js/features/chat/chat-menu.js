@@ -5,6 +5,7 @@ import { icon } from "../../core/icons.js";
 import { deleteConversation } from "./clear-chat.js";
 import { blockFlow, unblockFlow } from "../block/block.js";
 import { isMuted, muteFlow } from "./mute.js";
+import { isArchived, isPinned, toggleArchive, togglePin } from "./pin-archive.js";
 import { openGroupInfo } from "../groups/group-info.js";
 import { leaveGroup } from "../groups/group-leave.js";
 import { reportGroup, reportUser } from "../report/report.js";
@@ -31,6 +32,10 @@ export function openChatMenu() {
   }
   const silenced = isMuted(state.active.id);
   items.unshift({ icon: silenced ? "bell" : "bellOff", label: t(silenced ? "mute.unmute" : "mute.action"), fn: () => muteFlow(state.active.id) });
+  const archived = isArchived(state.active.id);
+  items.unshift({ icon: archived ? "unarchive" : "archive", label: t(archived ? "archive.undo" : "archive.action"), fn: () => toggleArchive(state.active.id) });
+  const pinned = isPinned(state.active.id);
+  items.unshift({ icon: "pin", label: t(pinned ? "pin.undo" : "pin.action"), fn: () => togglePin(state.active.id) });
   items.push({ icon: "trash", label: t("chat.delete"), fn: () => deleteConversation(state.active?.id), danger: true });
   chatMenu.replaceChildren(...items.map(it => {
     const b = el("button", "mi" + (it.danger ? " danger" : ""));
