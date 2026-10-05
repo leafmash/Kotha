@@ -9,6 +9,7 @@ import { lastText } from "../../core/message-format.js";
 import { renderCalls, watchCallHistory } from "../calls/call-history.js";
 import { isCleared } from "../chat/cleared.js";
 import { renderStrip } from "./notes.js";
+import { initSearchCollapse } from "./search-collapse.js";
 import { row } from "./row.js";
 import { openChat } from "../chat/chat-session.js";
 import { isMuted } from "../chat/mute.js";
@@ -96,6 +97,7 @@ function syncFilterUi() {
 }
 
 export function initChatList() {
+  initSearchCollapse();
   $("search").oninput = renderList;
   $("chips").onclick = e => {
     const b = e.target.closest("button");
