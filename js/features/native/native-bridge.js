@@ -7,6 +7,7 @@ import { db } from "../../core/firebase.js";
 import { closeDelete } from "../auth/delete-account.js";
 import { calls } from "../calls/calls.js";
 import { renderList } from "../chat-list/chat-list.js";
+import { exitSelect, isSelecting } from "../chat-list/selection.js";
 import { chatMenu, closeChatMenu } from "../chat/chat-menu.js";
 import { closeChat, openChatById } from "../chat/chat-session.js";
 import { closeForward } from "../chat/forward.js";
@@ -23,6 +24,7 @@ import { closeChoice, closeConfirm, closeEdit } from "../../ui/dialogs.js";
 import { initEdgeSwipe } from "../../ui/edge-swipe.js";
 import { closeMore, moreMenu } from "../../ui/more-menu.js";
 import { toast } from "../../ui/toast.js";
+import { closeActionSheet } from "../../ui/action-sheet.js";
 
 const openChatFromNative = id => {
   if (id && !openChatById(id)) state.pendingChat = id;
@@ -39,6 +41,7 @@ const layers = [
   { node: byId("deleteBox"), close: closeDelete },
   { node: byId("reportBox"), close: closeReport },
   { node: byId("confirm"), close: () => closeConfirm(false) },
+  { node: byId("actionSheet"), close: () => closeActionSheet(null) },
   { node: byId("choice"), close: () => closeChoice(null) },
   { node: byId("editBox"), close: () => closeEdit(null) },
   { node: () => chatMenu, close: closeChatMenu },
@@ -71,6 +74,7 @@ const handleBack = () => {
     return true;
   }
   if (!$("replyBar").hidden) { clearReply(); return true; }
+  if (isSelecting()) { exitSelect(); return true; }
   if (state.active) { closeChat(); renderList(); return true; }
   return false;
 };
