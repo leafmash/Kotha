@@ -10,6 +10,7 @@ import { callEventParts, callLogText } from "../../core/message-format.js";
 import { calls } from "../calls/calls.js";
 import { messageCleared } from "./cleared.js";
 import { attachGestures } from "./gestures.js";
+import { syncMessageSelection } from "./message-selection.js";
 import { clearReply } from "./reply.js";
 import { createVoicePlayer } from "./voice-player.js";
 import { sysText } from "../groups/group-admin.js";
@@ -32,6 +33,7 @@ export function renderMessages(all) {
   let lastDay = "";
   let prevFrom = null;
   let hiddenRun = false;
+  const rendered = [];
   state.active.lastId = docs.length ? docs[docs.length - 1].id : null;
 
   docs.forEach(d => {
@@ -168,8 +170,10 @@ export function renderMessages(all) {
     b.append(meta);
 
     attachGestures(b, d, m, mine);
+    rendered.push({ d, m, mine });
     box.append(b);
   });
+  syncMessageSelection(rendered);
 
   if (state.active.olderLoad) {
     box.scrollTop = box.scrollHeight - prevHeight + prevTop;

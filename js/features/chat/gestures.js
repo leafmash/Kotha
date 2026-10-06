@@ -2,7 +2,7 @@ import { el } from "../../core/dom.js";
 import { icon } from "../../core/icons.js";
 import { preview } from "../../core/message-format.js";
 import { haptic } from "../../native.js";
-import { menuBox, openMenu } from "./message-menu.js";
+import { isSelectingMessages, toggleMessage } from "./message-selection.js";
 import { setReply } from "./reply.js";
 
 export function attachGestures(b, d, m, mine) {
@@ -17,11 +17,11 @@ export function attachGestures(b, d, m, mine) {
     ico.style.opacity = 0;
     setTimeout(() => { b.style.transition = ""; }, 220);
   };
-  const show = () => {
+  const select = () => {
     cancelPress();
     fired = true;
     haptic("press");
-    openMenu(d, m, mine);
+    toggleMessage(d, m, mine);
   };
   b.addEventListener("pointerdown", e => {
     if (e.pointerType === "mouse") return;
@@ -33,7 +33,7 @@ export function attachGestures(b, d, m, mine) {
     sy = e.clientY;
     dx = 0;
     cancelPress();
-    timer = setTimeout(show, 450);
+    timer = setTimeout(select, 450);
   });
   b.addEventListener("pointermove", e => {
     if (!tracking || fired) return;
@@ -41,7 +41,7 @@ export function attachGestures(b, d, m, mine) {
     const my = e.clientY - sy;
     if (!swiping && (Math.abs(mx) > 10 || Math.abs(my) > 10)) cancelPress();
     const dir = mine ? -1 : 1;
-    if (!swiping && mx * dir > 12 && Math.abs(mx) > Math.abs(my) * 1.4 && !m.deleted) swiping = true;
+    if (!swiping && mx * dir > 12 && Math.abs(mx) > Math.abs(my) * 1.4 && !m.deleted && !isSelectingMessages()) swiping = true;
     if (!swiping) return;
     dx = Math.max(0, Math.min(mx * dir, 90));
     b.style.transform = `translateX(${dx * dir}px)`;
@@ -70,7 +70,9 @@ export function attachGestures(b, d, m, mine) {
   b.addEventListener("pointercancel", end);
   b.addEventListener("contextmenu", e => {
     e.preventDefault();
-    if (menuBox.hidden) show();
+    if (tracking || fired) return;
+    haptic("press");
+    toggleMessage(d, m, mine);
   });
   b.addEventListener("click", e => {
     if (fired || dx >= 12) {
@@ -78,6 +80,11 @@ export function attachGestures(b, d, m, mine) {
       e.stopPropagation();
       fired = false;
       dx = 0;
+      return;
     }
+    if (!isSelectingMessages()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    toggleMessage(d, m, mine);
   }, true);
 }

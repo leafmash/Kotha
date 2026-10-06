@@ -8,6 +8,7 @@ import { renderList } from "../chat-list/chat-list.js";
 import { syncComposer } from "./composer.js";
 import { renderPeer } from "./header.js";
 import { goneCache, renderMessages } from "./message-list.js";
+import { exitMessageSelection } from "./message-selection.js";
 import { markRead } from "./read-state.js";
 import { clearReply } from "./reply.js";
 import { stopVoice } from "./voice-player.js";
@@ -38,6 +39,7 @@ const drafts = new Map();
 export const draftOf = id => (drafts.get(id) || "").trim();
 
 export function closeChat(instant = false) {
+  exitMessageSelection();
   stopVoice();
   if (state.active) drafts.set(state.active.id, input.value);
   msgUnsub?.();
@@ -62,6 +64,7 @@ export function closeChat(instant = false) {
 export async function openChat(peer, group) {
   const uid = auth.currentUser.uid;
   const id = group ? group.id : [uid, peer.uid].sort().join("_");
+  exitMessageSelection();
   if (state.active) drafts.set(state.active.id, input.value);
   chatUnsubs.forEach(u => u());
   chatUnsubs = [];

@@ -10,7 +10,7 @@ import { peerIdOf } from "./peer.js";
 import { send } from "./send.js";
 import { toast } from "../../ui/toast.js";
 
-const fwd = { picked: new Set(), payload: null, busy: false };
+const fwd = { picked: new Set(), payloads: [], busy: false };
 
 const forwardPayload = m => {
   if (isTextMsg(m)) return { type: "text", text: m.text, forwarded: true };
@@ -70,8 +70,8 @@ export function renderForward() {
   $("forwardSend").classList.toggle("off", !fwd.picked.size || fwd.busy);
 }
 
-export function openForward(m) {
-  fwd.payload = forwardPayload(m);
+export function openForward(messages) {
+  fwd.payloads = messages.map(forwardPayload);
   fwd.picked = new Set();
   fwd.busy = false;
   $("forwardFind").value = "";
@@ -83,7 +83,7 @@ export function openForward(m) {
 export function closeForward() {
   if ($("forwardSheet").hidden) return;
   $("forwardSheet").hidden = true;
-  fwd.payload = null;
+  fwd.payloads = [];
   fwd.picked = new Set();
   fwd.busy = false;
 }
@@ -92,7 +92,7 @@ export function initForward() {
   $("forwardClose").onclick = closeForward;
   $("forwardFind").oninput = renderForward;
   $("forwardSend").onclick = async () => {
-    if (fwd.busy || !fwd.picked.size || !fwd.payload) return;
+    if (fwd.busy || !fwd.picked.size || !fwd.payloads.length) return;
     if (!navigator.onLine) {
       toast(t("fwd.offline"));
       return;
@@ -100,7 +100,9 @@ export function initForward() {
     fwd.busy = true;
     renderForward();
     const targets = [...fwd.picked].map(id => state.chats.find(c => c.id === id)).filter(Boolean);
-    const results = await Promise.allSettled(targets.map(c => send({ ...fwd.payload }, { id: c.id, members: c.members, reply: null })));
+    const results = await Promise.allSettled(targets.map(async c => {
+      for (const payload of fwd.payloads) await send({ ...payload }, { id: c.id, members: c.members, reply: null });
+    }));
     const failed = results.filter(r => r.status === "rejected").length;
     closeForward();
     toast(failed ? t("fwd.partial", { n: fmtNumber(failed) }) : t("fwd.done"));
