@@ -61,7 +61,6 @@
         <button id="addBtn" title="Add contact" data-i18n-title="common.addContact"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/></svg></button>
         <button id="menuBtn" title="More" data-i18n-title="common.more" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24"><circle class="fill" cx="12" cy="5" r="1.8"/><circle class="fill" cx="12" cy="12" r="1.8"/><circle class="fill" cx="12" cy="19" r="1.8"/></svg></button>
       </div>
-      <div id="selBar" hidden></div>
       <div id="moreMenu" hidden role="menu"></div>
     </header>
     <div id="verifyBar" hidden>
@@ -99,6 +98,7 @@
         </div>
         <button id="chatMenuBtn" title="More options" data-i18n-title="chat.more" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24"><circle class="fill" cx="12" cy="5" r="1.8"/><circle class="fill" cx="12" cy="12" r="1.8"/><circle class="fill" cx="12" cy="19" r="1.8"/></svg></button>
         <div id="chatMenu" hidden role="menu"></div>
+        <div id="msgSelBar"></div>
       </header>
       <div id="offlineBar" hidden data-i18n="net.offline">You are offline. Messages will be sent when you are back online.</div>
       <div id="messages"></div>
@@ -367,13 +367,6 @@
     <h3 id="choiceTitle"></h3>
     <p id="choiceText"></p>
     <div class="dbtns col" id="choiceBtns"></div>
-  </div>
-</div>
-<div id="msgMenu" hidden role="dialog" aria-modal="true">
-  <div class="menu">
-    <div class="mreacts" id="menuReacts"></div>
-    <div class="mpreview" id="menuPreview"></div>
-    <div class="mitems" id="menuItems"></div>
   </div>
 </div>
 <div id="findSheet" hidden>
