@@ -11,3 +11,5 @@ resources
 scripts
 capacitor.config.json
 www
+native
+drop
