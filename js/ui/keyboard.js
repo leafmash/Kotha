@@ -1,11 +1,10 @@
 import { state } from "../core/state.js";
 import { $ } from "../core/dom.js";
 import { closeDelete } from "../features/auth/delete-account.js";
-import { exitSelect, isSelecting } from "../features/chat-list/selection.js";
 import { closeChatMenu } from "../features/chat/chat-menu.js";
 import { closeChat } from "../features/chat/chat-session.js";
 import { closeForward } from "../features/chat/forward.js";
-import { closeMenu } from "../features/chat/message-menu.js";
+import { exitMessageSelection, isSelectingMessages } from "../features/chat/message-selection.js";
 import { closeFind } from "../features/contacts/find-contact.js";
 import { closeEditProfile } from "../features/profile/edit-profile.js";
 import { closeProfile } from "../features/profile/profile.js";
@@ -29,7 +28,6 @@ export function initKeyboard() {
     closeActionSheet(null);
     closeChoice(null);
     closeEdit(null);
-    closeMenu();
     closeMore();
     closeChatMenu();
     closeForward();
@@ -53,7 +51,7 @@ export function initKeyboard() {
     else if (!$("sheet").hidden) $("sheet").hidden = true;
     else if (!$("infoSheet").hidden) $("infoSheet").hidden = true;
     else if (!$("emojiPanel").hidden) $("emojiPanel").hidden = true;
-    else if (isSelecting()) exitSelect();
+    else if (isSelectingMessages()) exitMessageSelection();
     else if (state.active) closeChat();
   });
 }

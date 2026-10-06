@@ -1,6 +1,6 @@
 import { haptic } from "../native.js";
 
-const TAP = "#tabs button, .mreacts button, .mitems .tile, .dbtns button, #micBtn, #voiceCallBtn, #videoCallBtn, #callMute, #callCam, #callFlip, #callSpeaker, #authBtn, #googleBtn";
+const TAP = "#tabs button, #msgSelBar button, .dbtns button, #micBtn, #voiceCallBtn, #videoCallBtn, #callMute, #callCam, #callFlip, #callSpeaker, #authBtn, #googleBtn";
 const PRESS = "#callAccept, #callDecline, #callEnd";
 
 export function initHaptics() {
