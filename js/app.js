@@ -1,5 +1,5 @@
 import { initDialogs } from "./ui/dialogs.js";
-import { initMessageMenu } from "./features/chat/message-menu.js";
+import { initMessageSelection } from "./features/chat/message-selection.js";
 import { initKeyboard } from "./ui/keyboard.js";
 import { initSplash } from "./ui/splash.js";
 import { initTransitions } from "./ui/transitions.js";
@@ -44,7 +44,7 @@ import { initNoteView } from "./features/chat-list/note-view.js";
 import { initNativeBridge } from "./features/native/native-bridge.js";
 
 initDialogs();
-initMessageMenu();
+initMessageSelection();
 initKeyboard();
 initSplash();
 initTransitions();
