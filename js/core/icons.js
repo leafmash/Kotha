@@ -32,7 +32,6 @@ const icons = {
   pin: '<path d="M9 4h6l-1 6 3 3v1H7v-1l3-3-1-6zM12 14v7"/>',
   archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/>',
   more: '<circle class="fill" cx="12" cy="5" r="1.8"/><circle class="fill" cx="12" cy="12" r="1.8"/><circle class="fill" cx="12" cy="19" r="1.8"/>',
-  select: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/>',
   unarchive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M12 17v-6M9 13l3-3 3 3"/>'
 };
 export const icon = (name, cls) => {
