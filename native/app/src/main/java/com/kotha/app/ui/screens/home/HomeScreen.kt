@@ -9,35 +9,55 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Chat
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kotha.app.R
+import com.kotha.app.ui.components.ConfirmDialog
+import com.kotha.app.ui.components.DeleteAccountDialog
+import com.kotha.app.ui.components.TermsGateDialog
+import com.kotha.app.ui.components.VerifyEmailBar
 
 private enum class HomeTab(
     @StringRes val label: Int,
@@ -52,10 +72,23 @@ private enum class HomeTab(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen() {
+fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
     var selected by rememberSaveable { mutableIntStateOf(0) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var confirmSignOut by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val snackbar = remember { SnackbarHostState() }
     val tabs = HomeTab.entries
+    val needsTerms by viewModel.needsTerms.collectAsStateWithLifecycle()
+    val unverifiedEmail by viewModel.unverifiedEmail.collectAsStateWithLifecycle()
+    val resendLocked by viewModel.resendLocked.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { snackbar.showSnackbar(context.getString(it)) }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.checkVerified(false) }
 
     Scaffold(
         topBar = {
@@ -65,6 +98,40 @@ fun HomeScreen() {
                         text = stringResource(R.string.app_name),
                         style = MaterialTheme.typography.titleLarge
                     )
+                },
+                actions = {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.common_more))
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.menu_sign_out)) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null) },
+                            onClick = {
+                                menuOpen = false
+                                confirmSignOut = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = stringResource(R.string.settings_delete_account),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Outlined.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                confirmDelete = true
+                            }
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
@@ -93,21 +160,58 @@ fun HomeScreen() {
                 }
             }
         },
+        snackbarHost = { SnackbarHost(snackbar) },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        EmptyState(
-            tab = tabs[selected],
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+        ) {
+            unverifiedEmail?.let { email ->
+                VerifyEmailBar(
+                    email = email,
+                    resendLocked = resendLocked,
+                    onResend = viewModel::resendVerification,
+                    onVerified = { viewModel.checkVerified(true) }
+                )
+            }
+            EmptyState(
+                tab = tabs[selected],
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+
+    if (confirmSignOut) {
+        ConfirmDialog(
+            title = stringResource(R.string.signout_title),
+            text = stringResource(R.string.signout_text),
+            confirmLabel = stringResource(R.string.signout_ok),
+            destructive = false,
+            onConfirm = {
+                confirmSignOut = false
+                viewModel.signOut()
+            },
+            onDismiss = { confirmSignOut = false }
         )
+    }
+
+    if (confirmDelete) {
+        DeleteAccountDialog(onDismiss = { confirmDelete = false })
+    }
+
+    if (needsTerms) {
+        TermsGateDialog(onAgree = viewModel::acceptTerms, onDecline = viewModel::declineTerms)
     }
 }
 
 @Composable
 private fun EmptyState(tab: HomeTab, modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.padding(horizontal = 40.dp),
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {

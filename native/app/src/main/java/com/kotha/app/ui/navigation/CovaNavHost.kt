@@ -7,29 +7,19 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.kotha.app.ui.screens.auth.AuthScreen
 import com.kotha.app.ui.screens.home.HomeScreen
 
 @Composable
-fun CovaNavHost(startRoute: String) {
+fun CovaNavHost() {
     val navController = rememberNavController()
     NavHost(
         navController = navController,
-        startDestination = startRoute,
+        startDestination = Routes.HOME,
         enterTransition = { fadeIn(tween(240)) },
         exitTransition = { fadeOut(tween(160)) },
         popEnterTransition = { fadeIn(tween(240)) },
         popExitTransition = { fadeOut(tween(160)) }
     ) {
-        composable(Routes.AUTH) {
-            AuthScreen(
-                onContinue = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.AUTH) { inclusive = true }
-                    }
-                }
-            )
-        }
         composable(Routes.HOME) {
             HomeScreen()
         }
