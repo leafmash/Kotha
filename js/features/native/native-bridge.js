@@ -7,11 +7,10 @@ import { db } from "../../core/firebase.js";
 import { closeDelete } from "../auth/delete-account.js";
 import { calls } from "../calls/calls.js";
 import { renderList } from "../chat-list/chat-list.js";
-import { exitSelect, isSelecting } from "../chat-list/selection.js";
 import { chatMenu, closeChatMenu } from "../chat/chat-menu.js";
 import { closeChat, openChatById } from "../chat/chat-session.js";
 import { closeForward } from "../chat/forward.js";
-import { closeMenu } from "../chat/message-menu.js";
+import { exitMessageSelection, isSelectingMessages } from "../chat/message-selection.js";
 import { clearReply } from "../chat/reply.js";
 import { closeFind } from "../contacts/find-contact.js";
 import { closeEditProfile } from "../profile/edit-profile.js";
@@ -50,7 +49,6 @@ const layers = [
   { node: byId("blockedSheet"), close: closeBlocked, drag: true },
   { node: byId("profileSheet"), close: closeProfile, drag: true },
   { node: byId("settingsSheet"), close: closeSettings, drag: true },
-  { node: byId("msgMenu"), close: closeMenu },
   { node: () => moreMenu, close: closeMore },
   { node: byId("forwardSheet"), close: closeForward, drag: true },
   { node: byId("lightbox"), close: hideNode("lightbox") },
@@ -74,7 +72,7 @@ const handleBack = () => {
     return true;
   }
   if (!$("replyBar").hidden) { clearReply(); return true; }
-  if (isSelecting()) { exitSelect(); return true; }
+  if (isSelectingMessages()) { exitMessageSelection(); return true; }
   if (state.active) { closeChat(); renderList(); return true; }
   return false;
 };
@@ -82,7 +80,7 @@ const handleBack = () => {
 const swipeTarget = () => {
   const layer = topLayer();
   if (layer) return layer.drag ? { node: layer.node(), close: layer.close } : null;
-  if (!state.active || !mobileLayout() || calls.busy() || !$("replyBar").hidden) return null;
+  if (!state.active || !mobileLayout() || calls.busy() || !$("replyBar").hidden || isSelectingMessages()) return null;
   return { node: $("chat"), close: () => { closeChat(true); renderList(); } };
 };
 
