@@ -133,19 +133,13 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
                     }
                 }
             }
-            AnimatedVisibility(
+            ScrollDownButton(
                 visible = showScrollDown,
+                onClick = { scope.launch { listState.animateScrollToItem(0) } },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp)
-            ) {
-                SmallFloatingActionButton(onClick = { scope.launch { listState.animateScrollToItem(0) } }) {
-                    Icon(
-                        imageVector = Icons.Filled.KeyboardArrowDown,
-                        contentDescription = stringResource(R.string.chat_scroll_down)
-                    )
-                }
-            }
+            )
             SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter))
         }
         when (val current = mode) {
@@ -186,5 +180,17 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
             },
             onDismiss = { actionTarget = null }
         )
+    }
+}
+
+@Composable
+private fun ScrollDownButton(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    AnimatedVisibility(visible = visible, modifier = modifier) {
+        SmallFloatingActionButton(onClick = onClick) {
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowDown,
+                contentDescription = stringResource(R.string.chat_scroll_down)
+            )
+        }
     }
 }
