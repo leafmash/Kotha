@@ -1,6 +1,7 @@
 package com.kotha.app.ui.screens.chats
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,14 +21,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,7 +47,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -50,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kotha.app.R
 import com.kotha.app.ui.components.Avatar
+import com.kotha.app.ui.components.ConfirmDialog
+import com.kotha.app.ui.screens.chat.MuteDialog
 import com.kotha.app.util.Format
 import com.kotha.app.util.StoredText
 
@@ -65,6 +78,9 @@ fun ChatListContent(
     val base by viewModel.base.collectAsStateWithLifecycle()
     var query by rememberSaveable(groupsOnly) { mutableStateOf("") }
     var filter by rememberSaveable(groupsOnly) { mutableStateOf(ListFilter.All) }
+    var actionRow by remember { mutableStateOf<ChatRowUi?>(null) }
+    var muteRow by remember { mutableStateOf<ChatRowUi?>(null) }
+    var deleteRow by remember { mutableStateOf<ChatRowUi?>(null) }
     val term = query.trim().lowercase()
     val rows = remember(base, term, filter, groupsOnly) {
         val archivedView = filter == ListFilter.Archived && !groupsOnly
@@ -80,6 +96,51 @@ fun ChatListContent(
             }
             .filter { term.isEmpty() || it.name.lowercase().contains(term) }
             .sortedByDescending { pinFirst && it.pinned }
+    }
+
+    actionRow?.let { row ->
+        ChatActionsSheet(
+            row = row,
+            onPin = {
+                actionRow = null
+                viewModel.togglePin(row.id)
+            },
+            onMute = {
+                actionRow = null
+                if (row.muted) viewModel.mute(row.id, 0L) else muteRow = row
+            },
+            onArchive = {
+                actionRow = null
+                viewModel.toggleArchive(row.id)
+            },
+            onDelete = {
+                actionRow = null
+                deleteRow = row
+            },
+            onDismiss = { actionRow = null }
+        )
+    }
+    muteRow?.let { row ->
+        MuteDialog(
+            onPick = {
+                muteRow = null
+                viewModel.mute(row.id, it)
+            },
+            onDismiss = { muteRow = null }
+        )
+    }
+    deleteRow?.let { row ->
+        ConfirmDialog(
+            title = stringResource(R.string.chat_delete_title),
+            text = stringResource(R.string.chat_delete_text),
+            confirmLabel = stringResource(R.string.chat_delete),
+            destructive = true,
+            onConfirm = {
+                deleteRow = null
+                viewModel.deleteConversation(row.id)
+            },
+            onDismiss = { deleteRow = null }
+        )
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -151,7 +212,11 @@ fun ChatListContent(
                 )
                 else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(rows, key = { it.id }) { row ->
-                        ChatRow(row = row, onClick = { onOpenChat(row.id) })
+                        ChatRow(
+                            row = row,
+                            onClick = { onOpenChat(row.id) },
+                            onLongClick = { actionRow = row }
+                        )
                     }
                 }
             }
@@ -159,8 +224,9 @@ fun ChatListContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ChatRow(row: ChatRowUi, onClick: () -> Unit) {
+private fun ChatRow(row: ChatRowUi, onClick: () -> Unit, onLongClick: () -> Unit) {
     val context = LocalContext.current
     val stored = StoredText.display(context, row.lastMessage)
     val preview = buildAnnotatedString {
@@ -186,7 +252,7 @@ private fun ChatRow(row: ChatRowUi, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -248,4 +314,71 @@ private fun ChatRow(row: ChatRowUi, onClick: () -> Unit) {
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatActionsSheet(
+    row: ChatRowUi,
+    onPin: () -> Unit,
+    onMute: () -> Unit,
+    onArchive: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Avatar(name = row.name, photo = row.photo, size = 44.dp)
+            Spacer(Modifier.width(14.dp))
+            Text(
+                text = row.name.ifEmpty { stringResource(R.string.common_user) },
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        ActionItem(
+            icon = Icons.Outlined.PushPin,
+            label = stringResource(if (row.pinned) R.string.pin_undo else R.string.pin_action),
+            onClick = onPin
+        )
+        ActionItem(
+            icon = if (row.muted) Icons.Outlined.Notifications else Icons.Outlined.NotificationsOff,
+            label = stringResource(if (row.muted) R.string.mute_unmute else R.string.mute_action),
+            onClick = onMute
+        )
+        ActionItem(
+            icon = if (row.archived) Icons.Outlined.Unarchive else Icons.Outlined.Archive,
+            label = stringResource(if (row.archived) R.string.archive_undo else R.string.archive_action),
+            onClick = onArchive
+        )
+        ActionItem(
+            icon = Icons.Outlined.Delete,
+            label = stringResource(R.string.chat_delete),
+            onClick = onDelete,
+            danger = true
+        )
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun ActionItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    danger: Boolean = false
+) {
+    val tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    ListItem(
+        headlineContent = { Text(label, color = tint) },
+        leadingContent = { Icon(icon, contentDescription = null, tint = tint) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.clickable(onClick = onClick)
+    )
 }

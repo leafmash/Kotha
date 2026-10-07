@@ -103,6 +103,9 @@ fun HomeScreen(
     LaunchedEffect(Unit) {
         viewModel.messages.collect { snackbar.showSnackbar(context.getString(it)) }
     }
+    LaunchedEffect(Unit) {
+        listViewModel.events.collect { snackbar.showSnackbar(it.resolve(context)) }
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.checkVerified(false) }
 
     Scaffold(

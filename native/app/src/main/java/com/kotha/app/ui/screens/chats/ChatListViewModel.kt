@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.kotha.app.core.AppConfig
 import com.kotha.app.data.app.AppForeground
 import com.kotha.app.data.auth.AuthRepository
+import com.kotha.app.data.chat.ChatActionsRepository
 import com.kotha.app.data.chat.ChatListRepository
 import com.kotha.app.data.chat.ChatRepository
 import com.kotha.app.data.chat.ContactRepository
@@ -19,13 +20,18 @@ import com.kotha.app.data.net.NetworkMonitor
 import com.kotha.app.data.presence.PresenceRepository
 import com.kotha.app.data.presence.RtPresence
 import com.kotha.app.data.user.UserRepository
+import com.kotha.app.ui.UiMessage
 import com.kotha.app.util.ticker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 data class ChatRowUi(
     val id: String,
@@ -76,6 +82,7 @@ class ChatListViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val presenceRepository: PresenceRepository,
     private val authRepository: AuthRepository,
+    private val actions: ChatActionsRepository,
     @Suppress("UnusedPrivateProperty") private val chatRepository: ChatRepository,
     appForeground: AppForeground,
     draftStore: DraftStore,
@@ -104,7 +111,26 @@ class ChatListViewModel @Inject constructor(
         compute(d, e, ready)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ListBase())
 
+    private val mutableEvents = MutableSharedFlow<UiMessage>(extraBufferCapacity = 8)
+    val events: SharedFlow<UiMessage> = mutableEvents.asSharedFlow()
+
     fun openDirect(peerUid: String): String? = contactRepository.openDirect(peerUid)
+
+    fun togglePin(chatId: String) {
+        viewModelScope.launch { mutableEvents.emit(UiMessage(actions.togglePin(chatId))) }
+    }
+
+    fun toggleArchive(chatId: String) {
+        viewModelScope.launch { mutableEvents.emit(UiMessage(actions.toggleArchive(chatId))) }
+    }
+
+    fun mute(chatId: String, until: Long) {
+        viewModelScope.launch { mutableEvents.emit(UiMessage(actions.mute(chatId, until))) }
+    }
+
+    fun deleteConversation(chatId: String) {
+        viewModelScope.launch { mutableEvents.emit(UiMessage(actions.clearChats(listOf(chatId)))) }
+    }
 
     private fun compute(d: ListData, e: ListExtras, ready: Boolean): ListBase {
         val uid = authRepository.user?.uid.orEmpty()

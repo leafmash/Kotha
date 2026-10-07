@@ -1,6 +1,5 @@
 package com.kotha.app.ui.screens.chat
 
-import androidx.annotation.StringRes
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,9 +8,11 @@ import com.kotha.app.R
 import com.kotha.app.core.AppConfig
 import com.kotha.app.data.app.AppForeground
 import com.kotha.app.data.auth.AuthRepository
+import com.kotha.app.data.chat.ChatActionsRepository
 import com.kotha.app.data.chat.ChatListRepository
 import com.kotha.app.data.chat.ChatRepository
 import com.kotha.app.data.chat.DraftStore
+import com.kotha.app.data.chat.MessageRules
 import com.kotha.app.data.chat.ReplyRef
 import com.kotha.app.data.model.Chat
 import com.kotha.app.data.model.Message
@@ -20,6 +21,8 @@ import com.kotha.app.data.net.NetworkMonitor
 import com.kotha.app.data.presence.PresenceInfo
 import com.kotha.app.data.presence.PresenceRepository
 import com.kotha.app.data.user.UserRepository
+import com.kotha.app.ui.UiMessage
+import com.kotha.app.util.Format
 import com.kotha.app.util.ticker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -57,6 +60,16 @@ sealed interface ComposerMode {
     data object ReadOnly : ComposerMode
 }
 
+data class ChatMenuUi(
+    val group: Boolean = false,
+    val pinned: Boolean = false,
+    val archived: Boolean = false,
+    val muted: Boolean = false,
+    val peerUid: String = "",
+    val peerName: String = "",
+    val blocked: Boolean = false
+)
+
 data class HeaderUi(
     val name: String,
     val photo: String,
@@ -70,6 +83,7 @@ class ChatViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val chatRepository: ChatRepository,
     private val chatListRepository: ChatListRepository,
+    private val actions: ChatActionsRepository,
     private val presenceRepository: PresenceRepository,
     private val draftStore: DraftStore,
     authRepository: AuthRepository,
@@ -168,8 +182,33 @@ class ChatViewModel @Inject constructor(
 
     val replyTo = MutableStateFlow<ReplyRef?>(null)
 
-    private val mutableEvents = MutableSharedFlow<Int>(extraBufferCapacity = 4)
-    val events: SharedFlow<Int> = mutableEvents.asSharedFlow()
+    private val mutableEvents = MutableSharedFlow<UiMessage>(extraBufferCapacity = 8)
+    val events: SharedFlow<UiMessage> = mutableEvents.asSharedFlow()
+
+    private val selectedIds = MutableStateFlow<Set<String>>(emptySet())
+
+    val selectedMessages: StateFlow<List<Message>> = combine(selectedIds, items) { ids, list ->
+        list.filterIsInstance<ChatItem.Bubble>().map { it.message }.filter { it.id in ids }.reversed()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val menu: StateFlow<ChatMenuUi> = combine(
+        chat,
+        chatListRepository.prefs,
+        chatListRepository.blocked,
+        userRepository.users,
+        ticker(AppConfig.PRESENCE_TICK_MS)
+    ) { current, prefs, blocked, all, now ->
+        val peerId = if (current?.group == true) "" else current?.peerId(uid)?.ifEmpty { directPeerId } ?: directPeerId
+        ChatMenuUi(
+            group = current?.group == true,
+            pinned = prefs.pinned.containsKey(chatId),
+            archived = prefs.archived.containsKey(chatId),
+            muted = (prefs.muted[chatId] ?: 0L) > now,
+            peerUid = peerId,
+            peerName = all[peerId]?.name.orEmpty(),
+            blocked = peerId.isNotEmpty() && blocked.contains(peerId)
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ChatMenuUi())
 
     private var typing = false
     private var typingJob: Job? = null
@@ -250,9 +289,85 @@ class ChatViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 val denied = (e as? FirebaseFirestoreException)?.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
-                mutableEvents.emit(if (denied) R.string.chat_cannot_send else R.string.chat_send_fail)
+                mutableEvents.emit(UiMessage(if (denied) R.string.chat_cannot_send else R.string.chat_send_fail))
             }
         }
+    }
+
+    fun startSelect(id: String) {
+        selectedIds.value = setOf(id)
+    }
+
+    fun toggleSelect(id: String) {
+        selectedIds.update { if (id in it) it - id else it + id }
+    }
+
+    fun clearSelection() {
+        selectedIds.value = emptySet()
+    }
+
+    fun deleteMessages(targets: List<Message>, forAll: Boolean) {
+        val newestId = messages.value.firstOrNull()?.id
+        viewModelScope.launch {
+            try {
+                chatRepository.deleteMessages(chatId, targets, forAll, newestId)
+                clearSelection()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                mutableEvents.emit(UiMessage(R.string.msg_delete_fail))
+            }
+        }
+    }
+
+    fun editMessage(message: Message, text: String) {
+        val value = text.trim()
+        val minutes = Format.number(AppConfig.EDIT_WINDOW_MS / 60_000L)
+        if (value.isEmpty() || value == message.text) return
+        if (MessageRules.editLeftMs(message, System.currentTimeMillis()) <= 0) {
+            mutableEvents.tryEmit(UiMessage(R.string.msg_edit_expired, listOf(minutes)))
+            return
+        }
+        val wasLast = messages.value.firstOrNull()?.id == message.id
+        viewModelScope.launch {
+            try {
+                chatRepository.editMessage(chatId, message.id, value, wasLast)
+                clearSelection()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val denied = (e as? FirebaseFirestoreException)?.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                mutableEvents.emit(
+                    if (denied) UiMessage(R.string.msg_edit_expired, listOf(minutes)) else UiMessage(R.string.msg_edit_fail)
+                )
+            }
+        }
+    }
+
+    fun togglePin() {
+        viewModelScope.launch { mutableEvents.emit(UiMessage(actions.togglePin(chatId))) }
+    }
+
+    fun toggleArchive() {
+        viewModelScope.launch { mutableEvents.emit(UiMessage(actions.toggleArchive(chatId))) }
+    }
+
+    fun mute(until: Long) {
+        viewModelScope.launch { mutableEvents.emit(UiMessage(actions.mute(chatId, until))) }
+    }
+
+    fun deleteConversation(onDone: () -> Unit) {
+        viewModelScope.launch {
+            val result = actions.clearChats(listOf(chatId))
+            mutableEvents.emit(UiMessage(result))
+            if (result == R.string.chat_conv_deleted) onDone()
+        }
+    }
+
+    fun block(peerUid: String, name: String) {
+        val task = actions.block(peerUid) ?: return
+        task.addOnFailureListener { mutableEvents.tryEmit(UiMessage(R.string.block_fail)) }
+        mutableEvents.tryEmit(UiMessage(R.string.block_done, listOf(name)))
     }
 
     fun react(message: Message, emoji: String) {
@@ -266,13 +381,13 @@ class ChatViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                mutableEvents.emit(R.string.block_unblock_fail)
+                mutableEvents.emit(UiMessage(R.string.block_unblock_fail))
             }
         }
     }
 
     fun notifyCopied() {
-        mutableEvents.tryEmit(R.string.chat_copied)
+        mutableEvents.tryEmit(UiMessage(R.string.chat_copied))
     }
 
     override fun onCleared() {

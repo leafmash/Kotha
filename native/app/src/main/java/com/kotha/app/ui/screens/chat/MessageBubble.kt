@@ -75,6 +75,8 @@ fun MessageBubble(
     group: Boolean,
     senderName: String,
     highlighted: Boolean,
+    selecting: Boolean,
+    onClick: () -> Unit,
     onLongPress: () -> Unit,
     onReply: () -> Unit,
     onQuoteClick: (String) -> Unit
@@ -103,8 +105,8 @@ fun MessageBubble(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = if (item.first) 6.dp else 0.dp)
-            .pointerInput(message.id, message.deleted) {
-                if (message.deleted) return@pointerInput
+            .pointerInput(message.id, message.deleted, selecting) {
+                if (message.deleted || selecting) return@pointerInput
                 detectHorizontalDragGestures(
                     onDragEnd = {
                         if (offset.value >= threshold) onReply()
@@ -151,7 +153,7 @@ fun MessageBubble(
                 modifier = Modifier
                     .widthIn(max = 300.dp)
                     .combinedClickable(
-                        onClick = {},
+                        onClick = onClick,
                         onLongClick = {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             onLongPress()

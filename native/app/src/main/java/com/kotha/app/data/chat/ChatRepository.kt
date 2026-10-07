@@ -15,10 +15,13 @@ import com.kotha.app.data.net.PushOutbox
 import com.kotha.app.data.net.PushTrigger
 import com.kotha.app.data.resilient
 import com.kotha.app.data.snapshotFlow
+import com.kotha.app.util.StoredText
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -146,6 +149,39 @@ class ChatRepository @Inject constructor(
         val value: Any = if (current == emoji) FieldValue.delete() else emoji
         messageRef(chatId, messageId).update("reactions.$uid", value)
     }
+
+    suspend fun deleteMessages(chatId: String, targets: List<Message>, forAll: Boolean, newestId: String?) {
+        val uid = authRepository.user?.uid ?: return
+        val batch = firestore.batch()
+        targets.forEach { message ->
+            val ref = messageRef(chatId, message.id)
+            if (forAll && !message.deleted) {
+                batch.update(ref, mapOf("deleted" to true, "text" to "", "url" to ""))
+            } else {
+                batch.update(ref, "hiddenFor", FieldValue.arrayUnion(uid))
+            }
+        }
+        batch.commit().await()
+        if (forAll && targets.any { it.id == newestId }) {
+            chatRef(chatId).set(mapOf("lastMessage" to StoredText.token("deleted")), SetOptions.merge()).await()
+        }
+    }
+
+    suspend fun editMessage(chatId: String, messageId: String, text: String, wasLast: Boolean) {
+        messageRef(chatId, messageId).update(
+            mapOf("text" to text, "edited" to true, "editedAt" to FieldValue.serverTimestamp())
+        ).await()
+        if (wasLast) chatRef(chatId).set(mapOf("lastMessage" to text), SetOptions.merge()).await()
+    }
+
+    suspend fun forward(targets: List<Pair<String, List<String>>>, payloads: List<Map<String, Any>>): Int =
+        coroutineScope {
+            targets.map { (chatId, members) ->
+                async {
+                    runCatching { payloads.forEach { send(chatId, members, it, null) } }
+                }
+            }.awaitAll().count { it.isFailure }
+        }
 
     suspend fun unblock(peerUid: String) {
         val uid = authRepository.user?.uid ?: return
