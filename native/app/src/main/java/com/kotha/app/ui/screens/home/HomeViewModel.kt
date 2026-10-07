@@ -47,7 +47,7 @@ class HomeViewModel @Inject constructor(
 
     fun declineTerms() = sessionRepository.declineTerms()
 
-    fun signOut() = authRepository.signOut()
+    fun signOut() = sessionRepository.signOut()
 
     fun resendVerification() {
         if (mutableResendLocked.value) return

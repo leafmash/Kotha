@@ -14,10 +14,13 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,8 +59,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kotha.app.R
 import com.kotha.app.ui.components.ConfirmDialog
 import com.kotha.app.ui.components.DeleteAccountDialog
+import com.kotha.app.ui.components.OfflineBar
 import com.kotha.app.ui.components.TermsGateDialog
 import com.kotha.app.ui.components.VerifyEmailBar
+import com.kotha.app.ui.screens.chats.ChatListContent
+import com.kotha.app.ui.screens.chats.ChatListViewModel
+import com.kotha.app.ui.screens.chats.FindContactSheet
+import com.kotha.app.util.Format
 
 private enum class HomeTab(
     @StringRes val label: Int,
@@ -72,11 +80,16 @@ private enum class HomeTab(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
+fun HomeScreen(
+    onOpenChat: (String) -> Unit,
+    viewModel: HomeViewModel = hiltViewModel(),
+    listViewModel: ChatListViewModel = hiltViewModel()
+) {
     var selected by rememberSaveable { mutableIntStateOf(0) }
     var menuOpen by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var showFind by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
@@ -84,6 +97,8 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
     val needsTerms by viewModel.needsTerms.collectAsStateWithLifecycle()
     val unverifiedEmail by viewModel.unverifiedEmail.collectAsStateWithLifecycle()
     val resendLocked by viewModel.resendLocked.collectAsStateWithLifecycle()
+    val listBase by listViewModel.base.collectAsStateWithLifecycle()
+    val online by listViewModel.online.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { snackbar.showSnackbar(context.getString(it)) }
@@ -100,6 +115,9 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                     )
                 },
                 actions = {
+                    IconButton(onClick = { showFind = true }) {
+                        Icon(Icons.Filled.PersonAdd, contentDescription = stringResource(R.string.common_add_contact))
+                    }
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.common_more))
                     }
@@ -150,10 +168,19 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                             }
                         },
                         icon = {
-                            Icon(
-                                imageVector = if (selected == index) tab.selectedIcon else tab.icon,
-                                contentDescription = null
-                            )
+                            val unread = if (tab == HomeTab.Chats) listBase.totalUnread else 0
+                            BadgedBox(
+                                badge = {
+                                    if (unread > 0) {
+                                        Badge { Text(if (unread > 99) "99+" else Format.number(unread)) }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (selected == index) tab.selectedIcon else tab.icon,
+                                    contentDescription = null
+                                )
+                            }
                         },
                         label = { Text(stringResource(tab.label)) }
                     )
@@ -176,10 +203,25 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                     onVerified = { viewModel.checkVerified(true) }
                 )
             }
-            EmptyState(
-                tab = tabs[selected],
-                modifier = Modifier.weight(1f)
-            )
+            OfflineBar(offline = !online)
+            when (tabs[selected]) {
+                HomeTab.Chats -> ChatListContent(
+                    groupsOnly = false,
+                    viewModel = listViewModel,
+                    onOpenChat = onOpenChat,
+                    modifier = Modifier.weight(1f)
+                )
+                HomeTab.Groups -> ChatListContent(
+                    groupsOnly = true,
+                    viewModel = listViewModel,
+                    onOpenChat = onOpenChat,
+                    modifier = Modifier.weight(1f)
+                )
+                HomeTab.Calls -> EmptyState(
+                    tab = HomeTab.Calls,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 
@@ -194,6 +236,16 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
                 viewModel.signOut()
             },
             onDismiss = { confirmSignOut = false }
+        )
+    }
+
+    if (showFind) {
+        FindContactSheet(
+            onDismiss = { showFind = false },
+            onOpenChat = {
+                showFind = false
+                onOpenChat(it)
+            }
         )
     }
 

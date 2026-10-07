@@ -10,6 +10,7 @@ import com.kotha.app.core.AppConfig
 import com.kotha.app.core.ApplicationScope
 import com.kotha.app.data.auth.AuthRepository
 import com.kotha.app.data.auth.PendingProfile
+import com.kotha.app.data.presence.PresenceRepository
 import com.kotha.app.util.AppLanguage
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -29,6 +30,7 @@ class SessionRepository @Inject constructor(
     private val authRepository: AuthRepository,
     private val firestore: FirebaseFirestore,
     private val pendingProfile: PendingProfile,
+    private val presenceRepository: PresenceRepository,
     @ApplicationScope private val scope: CoroutineScope
 ) {
 
@@ -42,9 +44,11 @@ class SessionRepository @Inject constructor(
         scope.launch {
             authRepository.currentUser.collectLatest { user ->
                 if (user == null) {
+                    presenceRepository.unbind()
                     mutableUnverifiedEmail.value = null
                     mutableState.value = SessionState.SignedOut
                 } else {
+                    presenceRepository.bind(user.uid)
                     onSignedIn(user)
                 }
             }
@@ -71,7 +75,16 @@ class SessionRepository @Inject constructor(
         }
     }
 
-    fun declineTerms() = authRepository.signOut()
+    fun declineTerms() {
+        signOut()
+    }
+
+    fun signOut() {
+        scope.launch {
+            presenceRepository.leave()
+            authRepository.signOut()
+        }
+    }
 
     suspend fun refreshVerification(): VerifyResult {
         val user = authRepository.user ?: return VerifyResult.Unchanged
