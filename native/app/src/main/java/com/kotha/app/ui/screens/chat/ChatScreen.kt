@@ -53,6 +53,7 @@ import com.kotha.app.data.chat.MessageRules
 import com.kotha.app.data.model.Message
 import com.kotha.app.ui.components.ConfirmDialog
 import com.kotha.app.ui.components.OfflineBar
+import com.kotha.app.ui.components.ReportSheet
 import com.kotha.app.ui.screens.chat.media.AttachSheet
 import com.kotha.app.ui.screens.chat.media.AttachmentPreview
 import com.kotha.app.ui.screens.chat.media.MediaCallbacks
@@ -64,7 +65,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
+fun ChatScreen(
+    onBack: () -> Unit,
+    onOpenGroup: (String) -> Unit,
+    onOpenUser: (String, String) -> Unit,
+    viewModel: ChatViewModel = hiltViewModel()
+) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val header by viewModel.header.collectAsStateWithLifecycle()
     val users by viewModel.users.collectAsStateWithLifecycle()
@@ -90,6 +96,7 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
     var showMute by remember { mutableStateOf(false) }
     var confirmBlock by remember { mutableStateOf(false) }
     var confirmDeleteChat by remember { mutableStateOf(false) }
+    var reportTarget by remember { mutableStateOf<Message?>(null) }
     var showAttach by rememberSaveable { mutableStateOf(false) }
     var viewerId by rememberSaveable { mutableStateOf<String?>(null) }
     var cameraTarget by rememberSaveable { mutableStateOf<String?>(null) }
@@ -202,6 +209,8 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
                 canForward = selected.all { MessageRules.canForward(it) },
                 canEdit = single != null && single.from == viewModel.uid &&
                     MessageRules.canEdit(single, System.currentTimeMillis()),
+                canReport = single != null && alive && single.from != viewModel.uid && single.upload == null &&
+                    single.type != "system" && single.type != "call",
                 onClose = viewModel::clearSelection,
                 onReply = {
                     single?.let { viewModel.setReply(it, MessageText.preview(context, it)) }
@@ -217,6 +226,10 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
                     viewModel.clearSelection()
                 },
                 onEdit = { editTarget = single },
+                onReport = {
+                    reportTarget = single
+                    viewModel.clearSelection()
+                },
                 onDelete = {
                     val list = selected
                     if (list.all { it.deleted }) viewModel.deleteMessages(list, false) else deleteTargets = list
@@ -236,6 +249,13 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
                 header = header,
                 menu = menu,
                 onBack = onBack,
+                onOpenInfo = {
+                    if (menu.group) {
+                        onOpenGroup(viewModel.chatId)
+                    } else if (menu.peerUid.isNotEmpty()) {
+                        onOpenUser(menu.peerUid, viewModel.chatId)
+                    }
+                },
                 onTogglePin = viewModel::togglePin,
                 onToggleArchive = viewModel::toggleArchive,
                 onToggleMute = { if (menu.muted) viewModel.mute(0L) else showMute = true },
@@ -414,6 +434,18 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
         } else {
             LaunchedEffect(openViewerId) { viewerId = null }
         }
+    }
+
+    reportTarget?.let { target ->
+        ReportSheet(
+            title = stringResource(R.string.report_title_message),
+            showBlock = !viewModel.isBlocked(target.from),
+            onSubmit = { reason, note, alsoBlock ->
+                reportTarget = null
+                viewModel.report(target, reason, note, alsoBlock)
+            },
+            onDismiss = { reportTarget = null }
+        )
     }
 
     editTarget?.let { target ->

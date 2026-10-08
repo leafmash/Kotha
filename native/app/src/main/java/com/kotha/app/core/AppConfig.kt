@@ -19,6 +19,13 @@ object AppConfig {
     const val IMAGE_MAX_SIDE = 1600
     const val IMAGE_QUALITY = 80
     const val IMAGE_SKIP_BYTES = 150 * 1024L
+    const val AVATAR_MAX_SIDE = 640
+    const val AVATAR_QUALITY = 85
+    const val GROUP_MAX = 256
+    const val NAME_MAX = 40
+    const val BIO_MAX = 140
+    const val GROUP_DESC_MAX = 300
+    const val REPORT_NOTE_MAX = 500
     const val THUMB_MAX_SIDE = 480
     const val THUMB_QUALITY = 75
     const val VOICE_MIN_MS = 700L

@@ -137,41 +137,51 @@ class MediaStager @Inject constructor(@ApplicationContext private val context: C
         return StagedMedia(target, pick.name, target.length(), pick.mime, "image", 0L, width, height, null)
     }
 
+    suspend fun avatarFile(uri: Uri): File? = withContext(Dispatchers.IO) {
+        val dir = File(context.cacheDir, "avatars").apply { mkdirs() }
+        val target = File(dir, "avatar_${System.currentTimeMillis()}.jpg")
+        if (renderJpeg(uri, target, AppConfig.AVATAR_MAX_SIDE, AppConfig.AVATAR_QUALITY) != null) target else null
+    }
+
     private fun compressImage(pick: PickedMedia, dir: File): StagedMedia? {
+        val base = pick.name.substringBeforeLast('.', pick.name).ifEmpty { "photo" }
+        val outName = "$base.jpg"
+        val target = File(dir, safeName(outName))
+        val size = renderJpeg(pick.uri, target, AppConfig.IMAGE_MAX_SIDE, AppConfig.IMAGE_QUALITY) ?: return null
+        if (pick.size > 0 && target.length() >= pick.size) {
+            target.delete()
+            return null
+        }
+        return StagedMedia(target, outName, target.length(), "image/jpeg", "image", 0L, size.first, size.second, null)
+    }
+
+    private fun renderJpeg(uri: Uri, target: File, maxSide: Int, quality: Int): Pair<Int, Int>? {
         val resolver = context.contentResolver
         var decoded: Bitmap? = null
         var transformed: Bitmap? = null
         return try {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            resolver.openInputStream(pick.uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-            val orientation = resolver.openInputStream(pick.uri)?.use {
+            val orientation = resolver.openInputStream(uri)?.use {
                 ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
             } ?: ExifInterface.ORIENTATION_NORMAL
             var sample = 1
             val longest = max(bounds.outWidth, bounds.outHeight)
-            while (longest / (sample * 2) >= AppConfig.IMAGE_MAX_SIDE) sample *= 2
+            while (longest / (sample * 2) >= maxSide) sample *= 2
             val options = BitmapFactory.Options().apply { inSampleSize = sample }
-            val source = resolver.openInputStream(pick.uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+            val source = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
                 ?: return null
             decoded = source
             val matrix = Matrix()
             applyOrientation(matrix, orientation)
-            val scale = min(1f, AppConfig.IMAGE_MAX_SIDE.toFloat() / max(source.width, source.height))
+            val scale = min(1f, maxSide.toFloat() / max(source.width, source.height))
             if (scale < 1f) matrix.postScale(scale, scale)
             val rotated = Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
             val result = flatten(rotated)
             transformed = result
-            val base = pick.name.substringBeforeLast('.', pick.name).ifEmpty { "photo" }
-            val outName = "$base.jpg"
-            val target = File(dir, safeName(outName))
-            FileOutputStream(target).use { result.compress(Bitmap.CompressFormat.JPEG, AppConfig.IMAGE_QUALITY, it) }
-            if (pick.size > 0 && target.length() >= pick.size) {
-                target.delete()
-                null
-            } else {
-                StagedMedia(target, outName, target.length(), "image/jpeg", "image", 0L, result.width, result.height, null)
-            }
+            FileOutputStream(target).use { result.compress(Bitmap.CompressFormat.JPEG, quality, it) }
+            result.width to result.height
         } catch (e: Exception) {
             null
         } catch (e: OutOfMemoryError) {

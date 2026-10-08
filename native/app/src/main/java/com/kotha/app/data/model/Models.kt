@@ -9,7 +9,8 @@ data class UserProfile(
     val photo: String,
     val online: Boolean,
     val lastSeenMs: Long,
-    val lang: String
+    val lang: String,
+    val bio: String = ""
 )
 
 data class Chat(
@@ -32,6 +33,8 @@ data class Chat(
     fun peerId(uid: String): String = members.firstOrNull { it != uid }.orEmpty()
 
     fun isAdmin(uid: String): Boolean = admin == uid || admins.contains(uid)
+
+    fun adminIds(): List<String> = (listOf(admin) + admins).filter { it.isNotEmpty() && members.contains(it) }.distinct()
 }
 
 data class CallLog(val kind: String, val video: Boolean, val secs: Long)
@@ -139,7 +142,8 @@ fun DocumentSnapshot.toUserProfile(): UserProfile = UserProfile(
     photo = getString("photo").orEmpty(),
     online = getBoolean("online") == true,
     lastSeenMs = getTimestamp("lastSeen")?.toDate()?.time ?: 0L,
-    lang = getString("lang").orEmpty()
+    lang = getString("lang").orEmpty(),
+    bio = getString("bio").orEmpty()
 )
 
 fun DocumentSnapshot.toChat(): Chat = Chat(

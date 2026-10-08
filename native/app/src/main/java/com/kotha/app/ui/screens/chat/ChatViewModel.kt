@@ -28,6 +28,9 @@ import com.kotha.app.data.media.VoiceRecorder
 import com.kotha.app.data.model.Chat
 import com.kotha.app.data.model.Message
 import com.kotha.app.data.model.UploadStage
+import com.kotha.app.data.prefs.AppPreferences
+import com.kotha.app.data.report.ReportRepository
+import com.kotha.app.data.report.ReportTarget
 import com.kotha.app.data.model.UploadUi
 import com.kotha.app.data.model.UserProfile
 import com.kotha.app.data.net.NetworkMonitor
@@ -100,6 +103,8 @@ class ChatViewModel @Inject constructor(
     private val actions: ChatActionsRepository,
     private val presenceRepository: PresenceRepository,
     private val draftStore: DraftStore,
+    private val preferences: AppPreferences,
+    private val reportRepository: ReportRepository,
     private val mediaSender: MediaSender,
     private val jobStore: MediaJobStore,
     private val stager: MediaStager,
@@ -261,8 +266,8 @@ class ChatViewModel @Inject constructor(
                 }
         }
         viewModelScope.launch {
-            combine(messages, appForeground.foreground) { list, foreground ->
-                if (foreground) {
+            combine(messages, appForeground.foreground, preferences.readReceipts) { list, foreground, receipts ->
+                if (foreground && receipts) {
                     list.filter { it.from != uid && it.type != "system" && it.status != "seen" }.map { it.id }
                 } else {
                     emptyList()
@@ -275,6 +280,24 @@ class ChatViewModel @Inject constructor(
     }
 
     fun initialDraft(): String = draftStore.get(chatId)
+
+    fun isBlocked(id: String): Boolean = chatListRepository.blocked.value.contains(id)
+
+    fun report(message: Message, reason: String, note: String, alsoBlock: Boolean) {
+        val media = message.type != "text"
+        val target = ReportTarget(
+            type = "message",
+            chatId = chatId,
+            reportedUid = message.from,
+            messageId = message.id,
+            content = if (media) message.url else message.text,
+            contentType = message.type
+        )
+        viewModelScope.launch {
+            val sent = reportRepository.submit(target, reason, note, alsoBlock)
+            mutableEvents.emit(UiMessage(if (sent) R.string.report_sent else R.string.report_fail))
+        }
+    }
 
     fun loadOlder() {
         if (hasMore.value) limit.update { it + AppConfig.PAGE }

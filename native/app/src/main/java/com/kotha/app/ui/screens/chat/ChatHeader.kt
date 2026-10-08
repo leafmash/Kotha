@@ -1,5 +1,6 @@
 package com.kotha.app.ui.screens.chat
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kotha.app.R
@@ -44,6 +46,7 @@ fun ChatHeader(
     header: HeaderUi,
     menu: ChatMenuUi,
     onBack: () -> Unit,
+    onOpenInfo: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleArchive: () -> Unit,
     onToggleMute: () -> Unit,
@@ -59,7 +62,10 @@ fun ChatHeader(
             }
         },
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.clickable(role = Role.Button, onClick = onOpenInfo),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Avatar(name = header.name, photo = header.photo, size = 40.dp, online = header.online)
                 Spacer(Modifier.width(12.dp))
                 Column {
@@ -173,7 +179,7 @@ private fun statusLabel(status: HeaderStatus): Pair<String, Boolean> = when (sta
 }
 
 @Composable
-private fun presenceText(info: PresenceInfo, now: Long): String {
+internal fun presenceText(info: PresenceInfo, now: Long): String {
     if (info.online) return stringResource(R.string.presence_now)
     if (info.ms <= 0) return stringResource(R.string.chat_offline)
     val mins = maxOf(0L, now - info.ms) / 60_000L

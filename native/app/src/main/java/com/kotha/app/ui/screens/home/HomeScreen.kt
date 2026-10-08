@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Groups
@@ -17,8 +16,10 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Chat
-import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.GroupAdd
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
@@ -57,14 +58,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kotha.app.R
-import com.kotha.app.ui.components.ConfirmDialog
-import com.kotha.app.ui.components.DeleteAccountDialog
 import com.kotha.app.ui.components.OfflineBar
 import com.kotha.app.ui.components.TermsGateDialog
 import com.kotha.app.ui.components.VerifyEmailBar
 import com.kotha.app.ui.screens.chats.ChatListContent
 import com.kotha.app.ui.screens.chats.ChatListViewModel
 import com.kotha.app.ui.screens.chats.FindContactSheet
+import com.kotha.app.ui.screens.group.GroupPickerSheet
+import com.kotha.app.ui.screens.group.PickerMode
 import com.kotha.app.util.Format
 
 private enum class HomeTab(
@@ -82,13 +83,14 @@ private enum class HomeTab(
 @Composable
 fun HomeScreen(
     onOpenChat: (String) -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenProfile: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
     listViewModel: ChatListViewModel = hiltViewModel()
 ) {
     var selected by rememberSaveable { mutableIntStateOf(0) }
     var menuOpen by remember { mutableStateOf(false) }
-    var confirmSignOut by remember { mutableStateOf(false) }
-    var confirmDelete by remember { mutableStateOf(false) }
+    var showNewGroup by rememberSaveable { mutableStateOf(false) }
     var showFind by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
@@ -126,30 +128,27 @@ fun HomeScreen(
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.menu_sign_out)) },
-                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null) },
+                            text = { Text(stringResource(R.string.menu_new_group)) },
+                            leadingIcon = { Icon(Icons.Outlined.GroupAdd, contentDescription = null) },
                             onClick = {
                                 menuOpen = false
-                                confirmSignOut = true
+                                showNewGroup = true
                             }
                         )
                         DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = stringResource(R.string.settings_delete_account),
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Outlined.Delete,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            },
+                            text = { Text(stringResource(R.string.menu_profile)) },
+                            leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
                             onClick = {
                                 menuOpen = false
-                                confirmDelete = true
+                                onOpenProfile()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.menu_settings)) },
+                            leadingIcon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
+                            onClick = {
+                                menuOpen = false
+                                onOpenSettings()
                             }
                         )
                     }
@@ -228,20 +227,6 @@ fun HomeScreen(
         }
     }
 
-    if (confirmSignOut) {
-        ConfirmDialog(
-            title = stringResource(R.string.signout_title),
-            text = stringResource(R.string.signout_text),
-            confirmLabel = stringResource(R.string.signout_ok),
-            destructive = false,
-            onConfirm = {
-                confirmSignOut = false
-                viewModel.signOut()
-            },
-            onDismiss = { confirmSignOut = false }
-        )
-    }
-
     if (showFind) {
         FindContactSheet(
             onDismiss = { showFind = false },
@@ -252,8 +237,17 @@ fun HomeScreen(
         )
     }
 
-    if (confirmDelete) {
-        DeleteAccountDialog(onDismiss = { confirmDelete = false })
+    if (showNewGroup) {
+        GroupPickerSheet(
+            mode = PickerMode.Create,
+            chatId = "",
+            onDismiss = { showNewGroup = false },
+            onCreated = {
+                showNewGroup = false
+                onOpenChat(it)
+            },
+            onAdded = {}
+        )
     }
 
     if (needsTerms) {

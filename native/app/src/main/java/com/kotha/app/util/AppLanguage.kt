@@ -13,6 +13,10 @@ object AppLanguage {
 
     fun code(): String = if (locale().language == "bn") "bn" else "en"
 
+    fun set(code: String) {
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(code))
+    }
+
     fun toggle() {
         val next = if (code() == "bn") "en" else "bn"
         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(next))

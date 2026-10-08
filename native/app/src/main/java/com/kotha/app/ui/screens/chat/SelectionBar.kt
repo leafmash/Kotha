@@ -6,6 +6,7 @@ import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,11 +28,13 @@ fun SelectionBar(
     canCopy: Boolean,
     canForward: Boolean,
     canEdit: Boolean,
+    canReport: Boolean,
     onClose: () -> Unit,
     onReply: () -> Unit,
     onCopy: () -> Unit,
     onForward: () -> Unit,
     onEdit: () -> Unit,
+    onReport: () -> Unit,
     onDelete: () -> Unit
 ) {
     TopAppBar(
@@ -65,6 +68,11 @@ fun SelectionBar(
             if (canForward) {
                 IconButton(onClick = onForward) {
                     Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.msg_forward))
+                }
+            }
+            if (canReport) {
+                IconButton(onClick = onReport) {
+                    Icon(Icons.Filled.Flag, contentDescription = stringResource(R.string.report_message))
                 }
             }
             IconButton(onClick = onDelete) {
