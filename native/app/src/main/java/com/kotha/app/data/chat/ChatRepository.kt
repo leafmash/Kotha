@@ -1,9 +1,11 @@
 package com.kotha.app.data.chat
 
+import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Source
 import com.kotha.app.core.ApplicationScope
 import com.kotha.app.data.auth.AuthRepository
 import com.kotha.app.data.model.Chat
@@ -18,6 +20,7 @@ import com.kotha.app.data.snapshotFlow
 import com.kotha.app.util.StoredText
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -53,7 +56,17 @@ class ChatRepository @Inject constructor(
 
     private fun chatRef(chatId: String) = firestore.collection("chats").document(chatId)
 
-    private fun messageRef(chatId: String, messageId: String) = chatRef(chatId).collection("messages").document(messageId)
+    private fun messagesRef(chatId: String) = chatRef(chatId).collection("messages")
+
+    private fun messageRef(chatId: String, messageId: String) = messagesRef(chatId).document(messageId)
+
+    private suspend fun existsInCache(ref: DocumentReference): Boolean = try {
+        ref.get(Source.CACHE).await().exists()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
+    }
 
     fun observeChat(chatId: String): Flow<Chat?> =
         chatRef(chatId).snapshotFlow().map { if (it.exists()) it.toChat() else null }.resilient()
@@ -66,14 +79,17 @@ class ChatRepository @Inject constructor(
             .map { snapshot -> snapshot.documents.map { it.toMessage() } }
             .resilient()
 
+    fun newMessageId(chatId: String): String = messagesRef(chatId).document().id
+
     suspend fun send(
         chatId: String,
         members: List<String>,
         payload: Map<String, Any>,
-        reply: ReplyRef?
+        reply: ReplyRef?,
+        messageId: String? = null
     ) {
         val uid = authRepository.user?.uid ?: return
-        scope.async { performSend(chatId, members, uid, payload, reply) }.await()
+        scope.async { performSend(chatId, members, uid, payload, reply, messageId) }.await()
     }
 
     private suspend fun performSend(
@@ -81,8 +97,11 @@ class ChatRepository @Inject constructor(
         members: List<String>,
         uid: String,
         payload: Map<String, Any>,
-        reply: ReplyRef?
+        reply: ReplyRef?,
+        messageId: String?
     ) {
+        val ref = if (messageId != null) messagesRef(chatId).document(messageId) else messagesRef(chatId).document()
+        if (messageId != null && existsInCache(ref)) return
         val message = mutableMapOf<String, Any>(
             "from" to uid,
             "type" to "text",
@@ -103,7 +122,6 @@ class ChatRepository @Inject constructor(
             "typing" to mapOf(uid to false),
             "unread" to unread
         )
-        val ref = chatRef(chatId).collection("messages").document()
         val batch = firestore.batch()
         batch.set(ref, message)
         batch.set(chatRef(chatId), chatPatch, SetOptions.merge())

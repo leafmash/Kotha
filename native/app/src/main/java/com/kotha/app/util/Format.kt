@@ -45,6 +45,23 @@ object Format {
         return if (dayStart(ms) == dayStart(System.currentTimeMillis())) clock(ms) else shortDate(ms, "d MMM")
     }
 
+    fun duration(seconds: Double): String {
+        val total = seconds.toLong().coerceAtLeast(0L)
+        val formatter = NumberFormat.getInstance(AppLanguage.locale())
+        formatter.minimumIntegerDigits = 2
+        return number(total / 60) + ":" + formatter.format(total % 60)
+    }
+
+    fun fileSize(bytes: Long): String {
+        val locale = AppLanguage.locale()
+        return when {
+            bytes < 1024L -> number(bytes) + " B"
+            bytes < 1024L * 1024L -> String.format(locale, "%.1f KB", bytes / 1024.0)
+            bytes < 1024L * 1024L * 1024L -> String.format(locale, "%.1f MB", bytes / (1024.0 * 1024.0))
+            else -> String.format(locale, "%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+        }
+    }
+
     fun shortDate(ms: Long, skeleton: String): String {
         val pattern = DateFormat.getBestDateTimePattern(AppLanguage.locale(), skeleton)
         return SimpleDateFormat(pattern, AppLanguage.locale()).format(Date(ms))

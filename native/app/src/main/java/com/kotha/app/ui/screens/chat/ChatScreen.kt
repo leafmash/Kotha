@@ -1,6 +1,13 @@
 package com.kotha.app.ui.screens.chat
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -26,15 +33,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kotha.app.R
@@ -42,6 +53,11 @@ import com.kotha.app.data.chat.MessageRules
 import com.kotha.app.data.model.Message
 import com.kotha.app.ui.components.ConfirmDialog
 import com.kotha.app.ui.components.OfflineBar
+import com.kotha.app.ui.screens.chat.media.AttachSheet
+import com.kotha.app.ui.screens.chat.media.AttachmentPreview
+import com.kotha.app.ui.screens.chat.media.MediaCallbacks
+import com.kotha.app.ui.screens.chat.media.MediaViewer
+import com.kotha.app.ui.screens.chat.media.ViewerItem
 import com.kotha.app.ui.theme.CovaTheme
 import com.kotha.app.util.MessageText
 import kotlinx.coroutines.delay
@@ -59,7 +75,10 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
     val online by viewModel.online.collectAsStateWithLifecycle()
     val selected by viewModel.selectedMessages.collectAsStateWithLifecycle()
     val menu by viewModel.menu.collectAsStateWithLifecycle()
+    val recording by viewModel.recording.collectAsStateWithLifecycle()
+    val picks by viewModel.pendingPicks.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val clipboard = LocalClipboardManager.current
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
@@ -71,11 +90,77 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
     var showMute by remember { mutableStateOf(false) }
     var confirmBlock by remember { mutableStateOf(false) }
     var confirmDeleteChat by remember { mutableStateOf(false) }
+    var showAttach by rememberSaveable { mutableStateOf(false) }
+    var viewerId by rememberSaveable { mutableStateOf<String?>(null) }
+    var cameraTarget by rememberSaveable { mutableStateOf<String?>(null) }
     val group = chat?.group == true
     val selecting = selected.isNotEmpty()
     val selectedIds = remember(selected) { selected.map { it.id }.toSet() }
 
     BackHandler(enabled = selecting) { viewModel.clearSelection() }
+    BackHandler(enabled = recording != null) { viewModel.cancelRecording() }
+
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) {
+        viewModel.onPicked(it)
+    }
+    val documentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) {
+        viewModel.onPicked(it)
+    }
+    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { done ->
+        val target = cameraTarget
+        cameraTarget = null
+        if (done && target != null) viewModel.onPicked(listOf(Uri.parse(target)))
+    }
+    val videoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()) { done ->
+        val target = cameraTarget
+        cameraTarget = null
+        if (done && target != null) viewModel.onPicked(listOf(Uri.parse(target)))
+    }
+    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            viewModel.startRecording()
+        } else {
+            scope.launch { snackbar.showSnackbar(context.getString(R.string.chat_mic_permission)) }
+        }
+    }
+    val launchCamera: (Boolean) -> Unit = { video ->
+        val target = viewModel.newCameraUri(video)
+        cameraTarget = target.toString()
+        val started = runCatching {
+            if (video) videoLauncher.launch(target) else photoLauncher.launch(target)
+        }
+        if (started.isFailure) {
+            cameraTarget = null
+            scope.launch { snackbar.showSnackbar(context.getString(R.string.camera_unavailable)) }
+        }
+    }
+    val mediaCallbacks = remember(viewModel) {
+        MediaCallbacks(
+            voice = viewModel.voice,
+            onOpen = { id ->
+                val message = viewModel.items.value
+                    .filterIsInstance<ChatItem.Bubble>()
+                    .map { it.message }
+                    .firstOrNull { it.id == id }
+                if (message != null) {
+                    if (message.type == "file") {
+                        if (message.url.isNotEmpty()) {
+                            val open = Intent(Intent.ACTION_VIEW, Uri.parse(message.url))
+                            val result = runCatching { context.startActivity(open) }
+                            if (result.isFailure) {
+                                scope.launch { snackbar.showSnackbar(context.getString(R.string.file_open_fail)) }
+                            }
+                        }
+                    } else if (message.type == "image" || message.type == "video") {
+                        viewerId = id
+                    }
+                }
+            },
+            onRetry = viewModel::retryUpload,
+            onCancel = viewModel::cancelUpload
+        )
+    }
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { snackbar.showSnackbar(it.resolve(context)) }
@@ -137,7 +222,7 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
                     if (list.all { it.deleted }) viewModel.deleteMessages(list, false) else deleteTargets = list
                 }
             )
-            if (single != null && !single.deleted) {
+            if (single != null && !single.deleted && single.upload == null) {
                 ReactionRow(
                     current = single.reactions[viewModel.uid],
                     onReact = {
@@ -199,6 +284,7 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
                                 senderName = users[item.message.from]?.name.orEmpty(),
                                 highlighted = highlightedId == item.message.id,
                                 selecting = selecting,
+                                media = mediaCallbacks,
                                 onClick = { if (selecting) viewModel.toggleSelect(item.message.id) },
                                 onLongPress = {
                                     if (selecting) viewModel.toggleSelect(item.message.id)
@@ -234,8 +320,25 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
                 initialText = viewModel.initialDraft(),
                 replyTo = replyTo,
                 onCancelReply = viewModel::clearReply,
+                recording = recording,
                 onTextChange = viewModel::onInput,
-                onSend = viewModel::send
+                onSend = viewModel::send,
+                onAttach = { showAttach = true },
+                onStartRecording = {
+                    val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                        PackageManager.PERMISSION_GRANTED
+                    if (granted) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.startRecording()
+                    } else {
+                        micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                },
+                onStopRecording = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    viewModel.finishRecording()
+                },
+                onCancelRecording = viewModel::cancelRecording
             )
             ComposerMode.ReadOnly -> InfoBar(text = stringResource(R.string.ginfo_ro_bar))
             is ComposerMode.Blocked -> InfoBar(
@@ -243,6 +346,73 @@ fun ChatScreen(onBack: () -> Unit, viewModel: ChatViewModel = hiltViewModel()) {
                 actionLabel = stringResource(R.string.block_unblock),
                 onAction = { viewModel.unblock(current.peerUid) }
             )
+        }
+    }
+
+    if (showAttach) {
+        AttachSheet(
+            onDismiss = { showAttach = false },
+            onGallery = {
+                showAttach = false
+                galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+            },
+            onCamera = {
+                showAttach = false
+                launchCamera(false)
+            },
+            onVideo = {
+                showAttach = false
+                launchCamera(true)
+            },
+            onDocument = {
+                showAttach = false
+                documentLauncher.launch(arrayOf("*/*"))
+            }
+        )
+    }
+
+    if (picks.isNotEmpty()) {
+        AttachmentPreview(
+            picks = picks,
+            frameOf = viewModel::previewFrame,
+            onRemove = viewModel::removePick,
+            onSend = viewModel::sendPicks,
+            onDismiss = viewModel::clearPicks
+        )
+    }
+
+    val openViewerId = viewerId
+    if (openViewerId != null) {
+        val you = stringResource(R.string.common_you)
+        val viewerItems = remember(openViewerId) {
+            viewModel.items.value
+                .asReversed()
+                .mapNotNull { (it as? ChatItem.Bubble)?.message }
+                .filter {
+                    (it.type == "image" || it.type == "video") && !it.deleted &&
+                        (it.url.isNotEmpty() || it.upload?.localPath.orEmpty().isNotEmpty())
+                }
+                .map {
+                    ViewerItem(
+                        id = it.id,
+                        type = it.type,
+                        url = it.url,
+                        localPath = it.upload?.localPath.orEmpty(),
+                        name = it.name,
+                        sender = if (it.from == viewModel.uid) you else users[it.from]?.name.orEmpty(),
+                        atMs = it.atMs
+                    )
+                }
+        }
+        if (viewerItems.any { it.id == openViewerId }) {
+            MediaViewer(
+                items = viewerItems,
+                startId = openViewerId,
+                voice = viewModel.voice,
+                onDismiss = { viewerId = null }
+            )
+        } else {
+            LaunchedEffect(openViewerId) { viewerId = null }
         }
     }
 

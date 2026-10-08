@@ -44,6 +44,15 @@ data class SysEvent(
     val name: String
 )
 
+enum class UploadStage { Queued, Uploading, Failed }
+
+data class UploadUi(
+    val stage: UploadStage,
+    val progress: Float,
+    val localPath: String,
+    val thumbPath: String
+)
+
 data class Message(
     val id: String,
     val from: String,
@@ -65,9 +74,15 @@ data class Message(
     val duration: Double,
     val wave: List<Float>,
     val callLog: CallLog?,
-    val sys: SysEvent?
+    val sys: SysEvent?,
+    val thumb: String = "",
+    val width: Int = 0,
+    val height: Int = 0,
+    val upload: UploadUi? = null
 ) {
     val isText: Boolean get() = type == "text"
+
+    val isMedia: Boolean get() = type == "image" || type == "video" || type == "audio" || type == "file"
 }
 
 data class ChatPrefs(
@@ -191,6 +206,9 @@ fun DocumentSnapshot.toMessage(): Message {
                 target = (it["target"] as? List<*>)?.filterIsInstance<String>().orEmpty(),
                 name = it["name"] as? String ?: ""
             )
-        }
+        },
+        thumb = getString("thumb").orEmpty(),
+        width = (get("w") as? Number)?.toInt() ?: 0,
+        height = (get("h") as? Number)?.toInt() ?: 0
     )
 }

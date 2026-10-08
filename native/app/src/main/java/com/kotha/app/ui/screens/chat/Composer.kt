@@ -20,7 +20,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +46,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kotha.app.R
 import com.kotha.app.data.chat.ReplyRef
+import com.kotha.app.data.media.RecordingState
+import com.kotha.app.ui.screens.chat.media.RecordingBar
 
 @Composable
 fun Composer(
@@ -51,8 +55,13 @@ fun Composer(
     initialText: String,
     replyTo: ReplyRef?,
     onCancelReply: () -> Unit,
+    recording: RecordingState?,
     onTextChange: (String) -> Unit,
-    onSend: (String) -> Unit
+    onSend: (String) -> Unit,
+    onAttach: () -> Unit,
+    onStartRecording: () -> Unit,
+    onStopRecording: () -> Unit,
+    onCancelRecording: () -> Unit
 ) {
     var text by rememberSaveable(chatId) { mutableStateOf(initialText) }
     Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
@@ -60,55 +69,80 @@ fun Composer(
             AnimatedVisibility(visible = replyTo != null) {
                 ReplyBar(text = replyTo?.text.orEmpty(), onCancel = onCancelReply)
             }
-            Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+            if (recording != null) {
+                RecordingBar(
+                    state = recording,
+                    onCancel = onCancelRecording,
+                    onSend = onStopRecording,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                )
+            } else {
+                Row(
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    BasicTextField(
-                        value = text,
-                        onValueChange = {
-                            text = it
-                            onTextChange(it)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        maxLines = 6,
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                        decorationBox = { inner ->
-                            Box {
-                                if (text.isEmpty()) {
-                                    Text(
-                                        text = stringResource(R.string.chat_message_placeholder),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                    IconButton(onClick = onAttach) {
+                        Icon(
+                            imageVector = Icons.Filled.AttachFile,
+                            contentDescription = stringResource(R.string.attach_title),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        BasicTextField(
+                            value = text,
+                            onValueChange = {
+                                text = it
+                                onTextChange(it)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            maxLines = 6,
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                            decorationBox = { inner ->
+                                Box {
+                                    if (text.isEmpty()) {
+                                        Text(
+                                            text = stringResource(R.string.chat_message_placeholder),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    inner()
                                 }
-                                inner()
                             }
+                        )
+                    }
+                    if (text.isBlank()) {
+                        FilledIconButton(onClick = onStartRecording, modifier = Modifier.padding(end = 4.dp)) {
+                            Icon(
+                                imageVector = Icons.Filled.Mic,
+                                contentDescription = stringResource(R.string.voice_record)
+                            )
                         }
-                    )
-                }
-                FilledIconButton(
-                    onClick = {
-                        val value = text
-                        text = ""
-                        onSend(value)
-                    },
-                    enabled = text.isNotBlank()
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = stringResource(R.string.chat_send)
-                    )
+                    } else {
+                        FilledIconButton(
+                            onClick = {
+                                val value = text
+                                text = ""
+                                onSend(value)
+                            },
+                            modifier = Modifier.padding(end = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = stringResource(R.string.chat_send)
+                            )
+                        }
+                    }
                 }
             }
         }

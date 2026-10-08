@@ -24,15 +24,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -52,7 +48,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +57,10 @@ import androidx.compose.ui.unit.dp
 import com.kotha.app.R
 import com.kotha.app.data.model.Message
 import com.kotha.app.ui.components.avatarColor
+import com.kotha.app.ui.screens.chat.media.FileBody
+import com.kotha.app.ui.screens.chat.media.MediaCallbacks
+import com.kotha.app.ui.screens.chat.media.VisualBody
+import com.kotha.app.ui.screens.chat.media.VoiceBody
 import com.kotha.app.ui.theme.CovaTheme
 import com.kotha.app.util.Format
 import com.kotha.app.util.MessageText
@@ -76,6 +75,7 @@ fun MessageBubble(
     senderName: String,
     highlighted: Boolean,
     selecting: Boolean,
+    media: MediaCallbacks,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
     onReply: () -> Unit,
@@ -94,6 +94,11 @@ fun MessageBubble(
     val haptics = LocalHapticFeedback.current
     var armed by remember { mutableStateOf(false) }
     val direction = if (mine) -1f else 1f
+    val tap: () -> Unit = { if (selecting) onClick() else media.onOpen(message.id) }
+    val longPress: () -> Unit = {
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        onLongPress()
+    }
     val shape = RoundedCornerShape(
         topStart = 18.dp,
         topEnd = 18.dp,
@@ -186,7 +191,15 @@ fun MessageBubble(
                             onClick = { message.replyId?.let(onQuoteClick) }
                         )
                     }
-                    BubbleBody(message = message, content = content, mine = mine)
+                    BubbleBody(
+                        message = message,
+                        content = content,
+                        mine = mine,
+                        selecting = selecting,
+                        media = media,
+                        onTap = tap,
+                        onLongPress = longPress
+                    )
                     if (message.reactions.isNotEmpty() && !message.deleted) {
                         ReactionChip(message = message, content = content)
                     }
@@ -231,7 +244,15 @@ private fun QuoteBlock(text: String, content: Color, onClick: () -> Unit) {
 }
 
 @Composable
-private fun BubbleBody(message: Message, content: Color, mine: Boolean) {
+private fun BubbleBody(
+    message: Message,
+    content: Color,
+    mine: Boolean,
+    selecting: Boolean,
+    media: MediaCallbacks,
+    onTap: () -> Unit,
+    onLongPress: () -> Unit
+) {
     when {
         message.deleted -> Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -248,8 +269,18 @@ private fun BubbleBody(message: Message, content: Color, mine: Boolean) {
                 color = content.copy(alpha = 0.7f)
             )
         }
-        message.type == "image" || message.type == "video" || message.type == "audio" || message.type == "file" ->
-            MediaPlaceholder(message = message, content = content)
+        message.type == "image" || message.type == "video" ->
+            VisualBody(message = message, onTap = onTap, onLongPress = onLongPress, callbacks = media)
+        message.type == "audio" -> VoiceBody(
+            message = message,
+            content = content,
+            selecting = selecting,
+            onTap = onTap,
+            onLongPress = onLongPress,
+            callbacks = media
+        )
+        message.type == "file" ->
+            FileBody(message = message, content = content, onTap = onTap, onLongPress = onLongPress, callbacks = media)
         else -> Text(
             text = MessageText.linkify(
                 message.text,
@@ -258,27 +289,6 @@ private fun BubbleBody(message: Message, content: Color, mine: Boolean) {
             style = MaterialTheme.typography.bodyLarge,
             color = content
         )
-    }
-}
-
-@Composable
-private fun MediaPlaceholder(message: Message, content: Color) {
-    val uriHandler = LocalUriHandler.current
-    val (icon, label) = when (message.type) {
-        "image" -> Icons.Filled.Image to stringResource(R.string.common_photo)
-        "video" -> Icons.Filled.Videocam to stringResource(R.string.common_video)
-        "audio" -> Icons.Filled.Mic to stringResource(R.string.common_voice_message)
-        else -> Icons.AutoMirrored.Filled.InsertDriveFile to message.name.ifEmpty { stringResource(R.string.common_file) }
-    }
-    Row(
-        modifier = Modifier
-            .clickable(enabled = message.url.isNotEmpty()) { runCatching { uriHandler.openUri(message.url) } }
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(imageVector = icon, contentDescription = null, tint = content)
-        Spacer(Modifier.width(8.dp))
-        Text(text = label, style = MaterialTheme.typography.bodyLarge, color = content)
     }
 }
 

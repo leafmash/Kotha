@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="attach_title">Attach</string>
+    <string name="attach_gallery">Gallery</string>
+    <string name="attach_camera">Camera</string>
+    <string name="attach_video">Video</string>
+    <string name="attach_document">Document</string>
+    <string name="attach_prepare_fail">Some files could not be added</string>
+    <string name="camera_unavailable">No camera app found</string>
+    <string name="preview_send">Send</string>
+    <string name="preview_remove">Remove</string>
+    <string name="upload_cancel">Cancel upload</string>
+    <string name="upload_retry">Retry upload</string>
+    <string name="file_open_fail">Could not open the file</string>
+    <string name="voice_record">Record voice message</string>
+    <string name="voice_cancel">Discard recording</string>
+    <string name="voice_send">Send voice message</string>
+    <string name="voice_play">Play</string>
+    <string name="voice_pause">Pause</string>
+    <string name="chat_record_fail">Could not start recording</string>
+    <string name="viewer_close">Close</string>
+    <string name="viewer_save">Save</string>
+    <string name="viewer_share">Share</string>
+    <string name="viewer_play">Play video</string>
+    <string name="viewer_saved">Saved</string>
+    <string name="viewer_save_fail">Could not save the file</string>
+    <string name="viewer_share_fail">Could not share the file</string>
+</resources>

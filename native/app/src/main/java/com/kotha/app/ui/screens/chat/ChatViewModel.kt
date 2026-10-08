@@ -1,5 +1,7 @@
 package com.kotha.app.ui.screens.chat
 
+import android.graphics.Bitmap
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,8 +16,19 @@ import com.kotha.app.data.chat.ChatRepository
 import com.kotha.app.data.chat.DraftStore
 import com.kotha.app.data.chat.MessageRules
 import com.kotha.app.data.chat.ReplyRef
+import com.kotha.app.data.media.MediaJob
+import com.kotha.app.data.media.JobState
+import com.kotha.app.data.media.MediaJobStore
+import com.kotha.app.data.media.MediaSender
+import com.kotha.app.data.media.MediaStager
+import com.kotha.app.data.media.PickedMedia
+import com.kotha.app.data.media.RecordingState
+import com.kotha.app.data.media.VoicePlayer
+import com.kotha.app.data.media.VoiceRecorder
 import com.kotha.app.data.model.Chat
 import com.kotha.app.data.model.Message
+import com.kotha.app.data.model.UploadStage
+import com.kotha.app.data.model.UploadUi
 import com.kotha.app.data.model.UserProfile
 import com.kotha.app.data.net.NetworkMonitor
 import com.kotha.app.data.presence.PresenceInfo
@@ -46,6 +59,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 sealed interface HeaderStatus {
     data object None : HeaderStatus
@@ -86,6 +100,11 @@ class ChatViewModel @Inject constructor(
     private val actions: ChatActionsRepository,
     private val presenceRepository: PresenceRepository,
     private val draftStore: DraftStore,
+    private val mediaSender: MediaSender,
+    private val jobStore: MediaJobStore,
+    private val stager: MediaStager,
+    private val recorder: VoiceRecorder,
+    val voice: VoicePlayer,
     authRepository: AuthRepository,
     userRepository: UserRepository,
     appForeground: AppForeground,
@@ -112,13 +131,18 @@ class ChatViewModel @Inject constructor(
 
     val users: StateFlow<Map<String, UserProfile>> = userRepository.users
 
+    private val localMessages: StateFlow<List<Message>> = combine(jobStore.jobs, jobStore.progress) { jobs, progress ->
+        jobs.filter { it.chatId == chatId && it.uid == uid }.map { it.toMessage(progress[it.id] ?: 0f) }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val items: StateFlow<List<ChatItem>> = combine(
         messages,
+        localMessages,
         chatListRepository.blocked,
         chatListRepository.cleared,
         chat
-    ) { list, blocked, cleared, current ->
-        buildChatItems(list, uid, current?.group == true, blocked, cleared[chatId] ?: 0L)
+    ) { list, local, blocked, cleared, current ->
+        buildChatItems(mergeMessages(list, local), uid, current?.group == true, blocked, cleared[chatId] ?: 0L)
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val hasMore: StateFlow<Boolean> = combine(messages, limit) { list, max -> list.size >= max }
@@ -182,6 +206,10 @@ class ChatViewModel @Inject constructor(
 
     val replyTo = MutableStateFlow<ReplyRef?>(null)
 
+    val recording: StateFlow<RecordingState?> = recorder.state
+
+    val pendingPicks = MutableStateFlow<List<PickedMedia>>(emptyList())
+
     private val mutableEvents = MutableSharedFlow<UiMessage>(extraBufferCapacity = 8)
     val events: SharedFlow<UiMessage> = mutableEvents.asSharedFlow()
 
@@ -216,6 +244,9 @@ class ChatViewModel @Inject constructor(
 
     init {
         chatListRepository.setActive(chatId)
+        viewModelScope.launch {
+            appForeground.foreground.filter { !it }.collect { cancelRecording() }
+        }
         viewModelScope.launch {
             combine(chat, appForeground.foreground) { current, foreground -> current to foreground }
                 .collect { (current, foreground) ->
@@ -294,6 +325,70 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun onPicked(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            val picks = withContext(Dispatchers.IO) { uris.take(AppConfig.ATTACH_MAX).map { stager.describe(it) } }
+            pendingPicks.update { (it + picks).take(AppConfig.ATTACH_MAX) }
+        }
+    }
+
+    fun removePick(index: Int) {
+        pendingPicks.update { list -> list.filterIndexed { position, _ -> position != index } }
+    }
+
+    fun clearPicks() {
+        pendingPicks.value = emptyList()
+    }
+
+    fun newCameraUri(video: Boolean): Uri = stager.newCameraUri(video)
+
+    fun previewFrame(uri: Uri): Bitmap? = stager.previewFrame(uri)
+
+    fun sendPicks() {
+        val picks = pendingPicks.value
+        if (picks.isEmpty()) return
+        pendingPicks.value = emptyList()
+        val members = chat.value?.members ?: listOf(uid, directPeerId)
+        val reply = replyTo.value
+        replyTo.value = null
+        stopTyping()
+        viewModelScope.launch {
+            val failed = mediaSender.enqueue(chatId, members, picks, reply)
+            if (failed > 0) mutableEvents.emit(UiMessage(R.string.attach_prepare_fail))
+        }
+    }
+
+    fun startRecording() {
+        voice.stop()
+        stopTyping()
+        if (!recorder.start()) mutableEvents.tryEmit(UiMessage(R.string.chat_record_fail))
+    }
+
+    fun finishRecording() {
+        val result = recorder.stop() ?: return
+        val members = chat.value?.members ?: listOf(uid, directPeerId)
+        val reply = replyTo.value
+        replyTo.value = null
+        viewModelScope.launch {
+            if (!mediaSender.enqueueVoice(chatId, members, result, reply)) {
+                mutableEvents.emit(UiMessage(R.string.chat_upload_fail))
+            }
+        }
+    }
+
+    fun cancelRecording() {
+        recorder.cancel()
+    }
+
+    fun retryUpload(id: String) {
+        mediaSender.retry(id)
+    }
+
+    fun cancelUpload(id: String) {
+        mediaSender.cancel(id)
+    }
+
     fun startSelect(id: String) {
         selectedIds.value = setOf(id)
     }
@@ -308,9 +403,16 @@ class ChatViewModel @Inject constructor(
 
     fun deleteMessages(targets: List<Message>, forAll: Boolean) {
         val newestId = messages.value.firstOrNull()?.id
+        val local = targets.filter { it.upload != null }
+        local.forEach { mediaSender.cancel(it.id) }
+        val remote = targets.filter { it.upload == null }
+        if (remote.isEmpty()) {
+            clearSelection()
+            return
+        }
         viewModelScope.launch {
             try {
-                chatRepository.deleteMessages(chatId, targets, forAll, newestId)
+                chatRepository.deleteMessages(chatId, remote, forAll, newestId)
                 clearSelection()
             } catch (e: CancellationException) {
                 throw e
@@ -371,6 +473,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun react(message: Message, emoji: String) {
+        if (message.upload != null) return
         chatRepository.react(chatId, message.id, emoji, message.reactions[uid])
     }
 
@@ -393,8 +496,55 @@ class ChatViewModel @Inject constructor(
     override fun onCleared() {
         if (chatListRepository.activeChatId.value == chatId) chatListRepository.setActive(null)
         stopTyping()
+        recorder.cancel()
+        voice.stop()
         super.onCleared()
     }
+
+    private fun mergeMessages(server: List<Message>, local: List<Message>): List<Message> {
+        if (local.isEmpty()) return server
+        val known = server.mapTo(HashSet()) { it.id }
+        val extra = local.filter { it.id !in known }
+        if (extra.isEmpty()) return server
+        return (server + extra).sortedByDescending { it.atMs }
+    }
+
+    private fun MediaJob.toMessage(progress: Float): Message = Message(
+        id = id,
+        from = uid,
+        type = kind,
+        text = "",
+        atMs = createdAtMs,
+        pending = true,
+        status = "sent",
+        replyText = replyText.ifEmpty { null },
+        replyId = replyId.ifEmpty { null },
+        reactions = emptyMap(),
+        hiddenFor = emptyList(),
+        deleted = false,
+        edited = false,
+        forwarded = false,
+        url = url,
+        name = name,
+        size = size,
+        duration = durationMs / 1000.0,
+        wave = wave.map { it.toFloat() },
+        callLog = null,
+        sys = null,
+        thumb = thumbUrl,
+        width = width,
+        height = height,
+        upload = UploadUi(
+            stage = when (state) {
+                JobState.QUEUED -> UploadStage.Queued
+                JobState.UPLOADING -> UploadStage.Uploading
+                JobState.FAILED -> UploadStage.Failed
+            },
+            progress = progress,
+            localPath = path,
+            thumbPath = thumbPath
+        )
+    )
 
     private fun stopTyping() {
         typingJob?.cancel()
