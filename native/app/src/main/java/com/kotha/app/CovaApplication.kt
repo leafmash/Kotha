@@ -5,6 +5,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.kotha.app.data.app.AppForeground
+import com.kotha.app.notify.NotificationChannels
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -16,6 +17,7 @@ class CovaApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        NotificationChannels.ensure(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 appForeground.set(true)

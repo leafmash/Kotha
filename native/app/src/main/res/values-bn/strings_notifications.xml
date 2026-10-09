@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_messages">মেসেজ</string>
+    <string name="channel_calls">ইনকামিং কল</string>
+    <string name="reply_label">উত্তর দিন</string>
+    <string name="you_label">আপনি</string>
+    <string name="mark_read_label">পড়া হয়েছে</string>
+    <string name="notif_on">চালু</string>
+    <string name="notif_off">বন্ধ</string>
+    <string name="notif_not_now">এখন নয়</string>
+    <string name="notif_permission_title">নোটিফিকেশনের অনুমতি দিন</string>
+    <string name="notif_permission_text">অ্যাপ বন্ধ থাকলেও নতুন মেসেজ ও কলের খবর জানাতে Cova-র নোটিফিকেশনের অনুমতি দরকার।</string>
+    <string name="notif_permission_allow">অনুমতি দিন</string>
+    <string name="battery_title">মেসেজ যেন সময়মতো আসে</string>
+    <string name="battery_text">কিছু ফোন ব্যাটারি বাঁচাতে ব্যাকগ্রাউন্ডে অ্যাপ বন্ধ করে দেয়, তাতে মেসেজ ও কল আসতে দেরি হতে পারে। সময়মতো নোটিফিকেশন পেতে Cova-কে সীমাহীনভাবে চলার অনুমতি দিন।</string>
+    <string name="battery_allow">অনুমতি দিন</string>
+    <string name="autostart_title">অটো-স্টার্টের অনুমতি দিন</string>
+    <string name="autostart_text">আপনার ফোন ব্যাকগ্রাউন্ডে Cova চালু হওয়া আটকে দিতে পারে। মেসেজ মিস না করতে পরের স্ক্রিনে Cova-র জন্য অটো-স্টার্ট চালু করুন।</string>
+    <string name="autostart_open">সেটিংস খুলুন</string>
+    <string name="settings_notifications">নোটিফিকেশন</string>
+    <string name="settings_notifications_app">নোটিফিকেশনের অনুমতি</string>
+    <string name="settings_notifications_messages">মেসেজের সাউন্ড ও ভাইব্রেশন</string>
+    <string name="settings_battery">ব্যাটারি ব্যবহার</string>
+    <string name="settings_battery_unrestricted">সীমাহীন</string>
+    <string name="settings_battery_optimized">অপ্টিমাইজড</string>
+    <string name="settings_autostart">অটো-স্টার্ট</string>
+</resources>

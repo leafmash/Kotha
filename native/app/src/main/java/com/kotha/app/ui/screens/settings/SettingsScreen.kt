@@ -173,6 +173,8 @@ fun SettingsScreen(
                 onClick = onOpenBlocked
             )
             HorizontalDivider(Modifier.padding(top = 8.dp))
+            NotificationSettingsSection()
+            HorizontalDivider(Modifier.padding(top = 8.dp))
             SectionLabel(R.string.settings_about)
             SettingRow(
                 icon = Icons.AutoMirrored.Filled.Notes,

@@ -11,6 +11,7 @@ import com.kotha.app.core.ApplicationScope
 import com.kotha.app.data.auth.AuthRepository
 import com.kotha.app.data.auth.PendingProfile
 import com.kotha.app.data.presence.PresenceRepository
+import com.kotha.app.data.push.PushTokenRepository
 import com.kotha.app.util.AppLanguage
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Singleton
 class SessionRepository @Inject constructor(
@@ -31,6 +33,7 @@ class SessionRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val pendingProfile: PendingProfile,
     private val presenceRepository: PresenceRepository,
+    private val pushTokenRepository: PushTokenRepository,
     @ApplicationScope private val scope: CoroutineScope
 ) {
 
@@ -45,6 +48,7 @@ class SessionRepository @Inject constructor(
             authRepository.currentUser.collectLatest { user ->
                 if (user == null) {
                     presenceRepository.unbind()
+                    scope.launch { pushTokenRepository.release() }
                     mutableUnverifiedEmail.value = null
                     mutableState.value = SessionState.SignedOut
                 } else {
@@ -82,6 +86,7 @@ class SessionRepository @Inject constructor(
     fun signOut() {
         scope.launch {
             presenceRepository.leave()
+            withTimeoutOrNull(PUSH_RELEASE_TIMEOUT_MS) { pushTokenRepository.release() }
             authRepository.signOut()
         }
     }
@@ -159,5 +164,9 @@ class SessionRepository @Inject constructor(
         if (!snap.exists() || snap.getString("uid") != user.uid) {
             ref.set(mapOf("uid" to user.uid)).await()
         }
+    }
+
+    private companion object {
+        const val PUSH_RELEASE_TIMEOUT_MS = 4_000L
     }
 }

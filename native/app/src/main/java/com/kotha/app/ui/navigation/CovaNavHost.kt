@@ -9,6 +9,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -16,6 +22,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import kotlinx.coroutines.flow.first
+import com.kotha.app.ui.components.NotificationOnboarding
 import com.kotha.app.ui.screens.chat.ChatScreen
 import com.kotha.app.ui.screens.group.GroupInfoScreen
 import com.kotha.app.ui.screens.home.HomeScreen
@@ -38,9 +46,22 @@ private fun NavHostController.openChatFresh(chatId: String) {
     navigate(Routes.chat(chatId)) { popUpTo(Routes.HOME) }
 }
 
+private fun NavHostController.openChatFromLink(chatId: String) {
+    val entry = currentBackStackEntry
+    val route = entry?.destination?.route
+    val current = entry?.arguments?.getString("chatId")
+    if (route == Routes.CHAT && current == chatId) return
+    navigate(Routes.chat(chatId)) {
+        popUpTo(Routes.HOME)
+        launchSingleTop = true
+    }
+}
+
 @Composable
-fun CovaNavHost() {
+fun CovaNavHost(navHostViewModel: NavHostViewModel = hiltViewModel()) {
     val navController = rememberNavController()
+    val pending by navHostViewModel.pending.collectAsStateWithLifecycle()
+    val ready by navHostViewModel.ready.collectAsStateWithLifecycle()
     NavHost(
         navController = navController,
         startDestination = Routes.HOME,
@@ -124,5 +145,26 @@ fun CovaNavHost() {
         ) {
             BlockedScreen(onBack = { navController.popBackStack() })
         }
+    }
+
+    LaunchedEffect(pending, ready) {
+        val link = pending
+        if (link == null || !ready) return@LaunchedEffect
+        navController.currentBackStackEntryFlow.first()
+        navHostViewModel.consume(link)
+        navController.openChatFromLink(link.chatId)
+    }
+
+    NotificationOnboarding(
+        enabled = ready,
+        onPermissionResult = { navHostViewModel.syncPush() }
+    )
+
+    LaunchedEffect(ready) {
+        if (ready) navHostViewModel.syncPush()
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (ready) navHostViewModel.syncPush()
     }
 }

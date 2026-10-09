@@ -1,3 +1,5 @@
 -keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod
 -keep class com.kotha.app.data.model.** { *; }
 -dontwarn org.webrtc.**
+-keep class me.leolin.shortcutbadger.** { *; }
+-dontwarn me.leolin.shortcutbadger.**
