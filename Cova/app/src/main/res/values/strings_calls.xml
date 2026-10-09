@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_calls_ongoing">Ongoing calls</string>
+    <string name="call_camera_off">Camera is off</string>
+    <string name="call_return">%1$s in progress — tap to return</string>
+    <string name="call_fsi_title">Full-screen call alerts</string>
+    <string name="call_fsi_text">Allow Cova to show incoming calls over the lock screen</string>
+</resources>

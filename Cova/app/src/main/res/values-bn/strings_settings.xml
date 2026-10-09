@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_theme">থিম</string>
+    <string name="theme_system">সিস্টেম অনুযায়ী</string>
+    <string name="theme_light">লাইট</string>
+    <string name="theme_dark">ডার্ক</string>
+    <string name="settings_font_size">ফন্টের আকার</string>
+    <string name="font_small">ছোট</string>
+    <string name="font_default">ডিফল্ট</string>
+    <string name="font_large">বড়</string>
+    <string name="font_huge">অনেক বড়</string>
+    <string name="settings_privacy">গোপনীয়তা</string>
+    <string name="settings_read_receipts">পড়ার রসিদ</string>
+    <string name="settings_read_receipts_hint">বন্ধ থাকলে আপনি কখন মেসেজ পড়েছেন তা অন্যরা দেখতে পাবে না।</string>
+    <string name="ginfo_photo_changed">গ্রুপের ছবি আপডেট হয়েছে</string>
+    <string name="member_view_profile">প্রোফাইল দেখুন</string>
+</resources>

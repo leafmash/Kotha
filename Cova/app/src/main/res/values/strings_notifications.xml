@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_messages">Messages</string>
+    <string name="channel_calls">Incoming calls</string>
+    <string name="reply_label">Reply</string>
+    <string name="you_label">You</string>
+    <string name="mark_read_label">Mark as read</string>
+    <string name="notif_on">On</string>
+    <string name="notif_off">Off</string>
+    <string name="notif_not_now">Not now</string>
+    <string name="notif_permission_title">Allow notifications</string>
+    <string name="notif_permission_text">Cova needs permission to notify you about new messages and calls when the app is closed.</string>
+    <string name="notif_permission_allow">Allow</string>
+    <string name="battery_title">Keep messages arriving</string>
+    <string name="battery_text">Some phones stop apps in the background to save battery, which can delay messages and calls. Allow Cova to run unrestricted so notifications arrive on time.</string>
+    <string name="battery_allow">Allow</string>
+    <string name="autostart_title">Allow auto-start</string>
+    <string name="autostart_text">Your phone may block Cova from starting in the background. Enable auto-start for Cova in the next screen so you don\'t miss messages.</string>
+    <string name="autostart_open">Open settings</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_notifications_app">Notification access</string>
+    <string name="settings_notifications_messages">Message sound and vibration</string>
+    <string name="settings_battery">Battery usage</string>
+    <string name="settings_battery_unrestricted">Unrestricted</string>
+    <string name="settings_battery_optimized">Optimized</string>
+    <string name="settings_autostart">Auto-start</string>
+</resources>
