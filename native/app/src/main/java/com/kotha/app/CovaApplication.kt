@@ -5,6 +5,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.kotha.app.data.app.AppForeground
+import com.kotha.app.data.call.CallCoordinator
 import com.kotha.app.notify.NotificationChannels
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -15,9 +16,13 @@ class CovaApplication : Application() {
     @Inject
     lateinit var appForeground: AppForeground
 
+    @Inject
+    lateinit var callCoordinator: CallCoordinator
+
     override fun onCreate() {
         super.onCreate()
         NotificationChannels.ensure(this)
+        callCoordinator.start()
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 appForeground.set(true)

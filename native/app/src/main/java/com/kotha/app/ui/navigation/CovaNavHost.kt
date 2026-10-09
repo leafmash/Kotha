@@ -8,6 +8,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import com.kotha.app.data.call.CallPhase
+import com.kotha.app.ui.screens.call.OngoingCallBanner
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,6 +65,20 @@ private fun NavHostController.openChatFromLink(chatId: String) {
 
 @Composable
 fun CovaNavHost(navHostViewModel: NavHostViewModel = hiltViewModel()) {
+    val call by navHostViewModel.call.collectAsStateWithLifecycle()
+    Column(modifier = Modifier.fillMaxSize()) {
+        val active = call
+        if (active != null && active.phase != CallPhase.Ended) {
+            OngoingCallBanner(active)
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            CovaNavGraph(navHostViewModel)
+        }
+    }
+}
+
+@Composable
+private fun CovaNavGraph(navHostViewModel: NavHostViewModel) {
     val navController = rememberNavController()
     val pending by navHostViewModel.pending.collectAsStateWithLifecycle()
     val ready by navHostViewModel.ready.collectAsStateWithLifecycle()

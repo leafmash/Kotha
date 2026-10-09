@@ -10,6 +10,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsOff
@@ -46,6 +48,8 @@ fun ChatHeader(
     header: HeaderUi,
     menu: ChatMenuUi,
     onBack: () -> Unit,
+    onVoiceCall: () -> Unit,
+    onVideoCall: () -> Unit,
     onOpenInfo: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleArchive: () -> Unit,
@@ -88,6 +92,15 @@ fun ChatHeader(
             }
         },
         actions = {
+            if (!menu.group) {
+                val callable = menu.peerUid.isNotEmpty() && !menu.blocked
+                IconButton(onClick = onVoiceCall, enabled = callable) {
+                    Icon(Icons.Outlined.Call, contentDescription = stringResource(R.string.call_voice))
+                }
+                IconButton(onClick = onVideoCall, enabled = callable) {
+                    Icon(Icons.Outlined.Videocam, contentDescription = stringResource(R.string.call_video))
+                }
+            }
             IconButton(onClick = { menuOpen = true }) {
                 Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.common_more))
             }

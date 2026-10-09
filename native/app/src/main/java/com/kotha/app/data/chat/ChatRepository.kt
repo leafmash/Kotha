@@ -86,10 +86,11 @@ class ChatRepository @Inject constructor(
         members: List<String>,
         payload: Map<String, Any>,
         reply: ReplyRef?,
-        messageId: String? = null
+        messageId: String? = null,
+        preview: String? = null
     ) {
         val uid = authRepository.user?.uid ?: return
-        scope.async { performSend(chatId, members, uid, payload, reply, messageId) }.await()
+        scope.async { performSend(chatId, members, uid, payload, reply, messageId, preview) }.await()
     }
 
     private suspend fun performSend(
@@ -98,7 +99,8 @@ class ChatRepository @Inject constructor(
         uid: String,
         payload: Map<String, Any>,
         reply: ReplyRef?,
-        messageId: String?
+        messageId: String?,
+        preview: String?
     ) {
         val ref = if (messageId != null) messagesRef(chatId).document(messageId) else messagesRef(chatId).document()
         if (messageId != null && existsInCache(ref)) return
@@ -116,7 +118,7 @@ class ChatRepository @Inject constructor(
         val name = message["name"] as? String ?: ""
         val unread = members.filter { it != uid }.associateWith { FieldValue.increment(1) }
         val chatPatch = mapOf(
-            "lastMessage" to previewStored(type, text, name),
+            "lastMessage" to (preview ?: previewStored(type, text, name)),
             "lastFrom" to uid,
             "lastAt" to FieldValue.serverTimestamp(),
             "typing" to mapOf(uid to false),

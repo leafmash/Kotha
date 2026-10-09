@@ -28,7 +28,7 @@ class ChatMessagingService : FirebaseMessagingService() {
         val actions = context.notifyEntryPoint().pushActions()
         val uid = actions.currentUid() ?: return
         if (data["type"] == "call") {
-            MessageNotifier.showCall(context, data)
+            com.kotha.app.call.CallPushHandler.handle(context, uid, data)
             return
         }
         val chatId = data["chatId"]?.takeIf { it.isNotBlank() } ?: return

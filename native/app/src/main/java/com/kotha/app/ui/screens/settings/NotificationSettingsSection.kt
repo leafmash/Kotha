@@ -66,6 +66,13 @@ fun NotificationSettingsSection() {
     ) {
         if (unrestricted) BatteryOptimization.openBatterySettings(context) else BatteryOptimization.requestExemption(context)
     }
+    if (!BatteryOptimization.canUseFullScreenIntent(context)) {
+        NotificationRow(
+            icon = Icons.Filled.NotificationsActive,
+            title = stringResource(R.string.call_fsi_title),
+            value = stringResource(R.string.call_fsi_text)
+        ) { BatteryOptimization.openFullScreenIntentSettings(context) }
+    }
     if (autostart) {
         NotificationRow(
             icon = Icons.Filled.PowerSettingsNew,

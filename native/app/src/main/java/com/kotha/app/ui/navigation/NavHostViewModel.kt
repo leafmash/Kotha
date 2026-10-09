@@ -2,6 +2,8 @@ package com.kotha.app.ui.navigation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kotha.app.data.call.CallManager
+import com.kotha.app.data.call.CallState
 import com.kotha.app.data.push.PushTokenRepository
 import com.kotha.app.data.session.SessionRepository
 import com.kotha.app.data.session.SessionState
@@ -19,8 +21,11 @@ import kotlinx.coroutines.launch
 class NavHostViewModel @Inject constructor(
     private val router: DeepLinkRouter,
     private val pushTokens: PushTokenRepository,
+    callManager: CallManager,
     sessionRepository: SessionRepository
 ) : ViewModel() {
+
+    val call: StateFlow<CallState?> = callManager.state
 
     val pending: StateFlow<DeepLink?> = router.pending
 

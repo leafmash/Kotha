@@ -19,6 +19,7 @@ object NotificationChannels {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         ensureMessages(context, manager)
         ensureCalls(context, manager)
+        ensureOngoing(context, manager)
     }
 
     private fun ensureMessages(context: Context, manager: NotificationManager) {
@@ -51,6 +52,19 @@ object NotificationChannels {
         channel.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE), attributes)
         channel.enableVibration(true)
         channel.vibrationPattern = CALL_VIBRATION
+        channel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        manager.createNotificationChannel(channel)
+    }
+
+    private fun ensureOngoing(context: Context, manager: NotificationManager) {
+        if (manager.getNotificationChannel(NotificationIds.CALL_ONGOING_CHANNEL) != null) return
+        val channel = NotificationChannel(
+            NotificationIds.CALL_ONGOING_CHANNEL,
+            context.getString(R.string.channel_calls_ongoing),
+            NotificationManager.IMPORTANCE_LOW
+        )
+        channel.setSound(null, null)
+        channel.enableVibration(false)
         channel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         manager.createNotificationChannel(channel)
     }

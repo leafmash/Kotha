@@ -52,6 +52,7 @@ import com.kotha.app.R
 import com.kotha.app.data.chat.MessageRules
 import com.kotha.app.data.model.Message
 import com.kotha.app.ui.components.ConfirmDialog
+import com.kotha.app.ui.screens.call.rememberCallStarter
 import com.kotha.app.ui.components.OfflineBar
 import com.kotha.app.ui.components.ReportSheet
 import com.kotha.app.ui.screens.chat.media.AttachSheet
@@ -71,6 +72,7 @@ fun ChatScreen(
     onOpenUser: (String, String) -> Unit,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
+    val startCall = rememberCallStarter()
     val items by viewModel.items.collectAsStateWithLifecycle()
     val header by viewModel.header.collectAsStateWithLifecycle()
     val users by viewModel.users.collectAsStateWithLifecycle()
@@ -249,6 +251,8 @@ fun ChatScreen(
                 header = header,
                 menu = menu,
                 onBack = onBack,
+                onVoiceCall = { startCall(viewModel.chatId, menu.peerUid, false) },
+                onVideoCall = { startCall(viewModel.chatId, menu.peerUid, true) },
                 onOpenInfo = {
                     if (menu.group) {
                         onOpenGroup(viewModel.chatId)

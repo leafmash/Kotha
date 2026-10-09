@@ -1,6 +1,5 @@
 package com.kotha.app.notify
 
-import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -18,7 +17,6 @@ import com.kotha.app.R
 
 object MessageNotifier {
 
-    private const val CALL_TIMEOUT_MS = 45_000L
     private const val OPEN_FLAGS = Intent.FLAG_ACTIVITY_NEW_TASK or
         Intent.FLAG_ACTIVITY_CLEAR_TOP or
         Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -51,30 +49,6 @@ object MessageNotifier {
         ConversationStore.setConversationTitle(context, chatId, title)
         ConversationStore.incrementUnread(context, chatId)
         post(context, chatId, data["senderUid"] ?: chatId, title, group)
-    }
-
-    fun showCall(context: Context, data: Map<String, String>) {
-        val chatId = data["chatId"].orEmpty()
-        val notificationId = NotificationIds.call(chatId)
-        NotificationChannels.ensure(context)
-        val open = openIntent(context, notificationId, chatId, true)
-        val title = data["title"]?.takeIf { it.isNotBlank() } ?: context.getString(R.string.app_name)
-
-        val notification = NotificationCompat.Builder(context, NotificationIds.CALL_CHANNEL)
-            .setSmallIcon(R.drawable.ic_stat_notify)
-            .setColor(ContextCompat.getColor(context, R.color.notification_icon_color))
-            .setContentTitle(title)
-            .setContentText(data["body"].orEmpty())
-            .setContentIntent(open)
-            .setFullScreenIntent(open, true)
-            .setAutoCancel(true)
-            .setTimeoutAfter(CALL_TIMEOUT_MS)
-            .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .build()
-        notification.flags = notification.flags or Notification.FLAG_INSISTENT
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
     }
 
     fun clearChat(context: Context, chatId: String, includeCall: Boolean) {

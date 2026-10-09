@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_calls_ongoing">চলমান কল</string>
+    <string name="call_camera_off">ক্যামেরা বন্ধ</string>
+    <string name="call_return">%1$s চলছে — ফিরে যেতে ট্যাপ করুন</string>
+    <string name="call_fsi_title">ফুল-স্ক্রিন কল অ্যালার্ট</string>
+    <string name="call_fsi_text">লক স্ক্রিনের ওপর ইনকামিং কল দেখানোর অনুমতি দিন</string>
+</resources>

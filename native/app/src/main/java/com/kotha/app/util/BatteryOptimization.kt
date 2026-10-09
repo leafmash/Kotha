@@ -30,6 +30,21 @@ object BatteryOptimization {
         start(context, appDetails(context))
     }
 
+    fun canUseFullScreenIntent(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
+        val manager = context.getSystemService(android.app.NotificationManager::class.java) ?: return true
+        return manager.canUseFullScreenIntent()
+    }
+
+    fun openFullScreenIntentSettings(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+                .setData(Uri.parse("package:${context.packageName}"))
+            if (start(context, intent)) return
+        }
+        openAppNotificationSettings(context)
+    }
+
     fun hasAutostartSettings(): Boolean = autostartIntents().isNotEmpty()
 
     fun openAutostartSettings(context: Context) {

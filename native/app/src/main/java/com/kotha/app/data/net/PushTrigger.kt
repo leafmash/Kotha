@@ -29,6 +29,13 @@ class PushTrigger @Inject constructor(
         scope.launch { run(payload.toString()) }
     }
 
+    fun notifyCall(callId: String) {
+        val payload = JSONObject()
+            .put("type", "call")
+            .put("callId", callId)
+        scope.launch { run(payload.toString()) }
+    }
+
     private suspend fun run(body: String) {
         for (wait in RETRY_DELAYS) {
             if (wait > 0) delay(wait)

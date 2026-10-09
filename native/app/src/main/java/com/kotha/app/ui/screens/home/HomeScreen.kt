@@ -61,6 +61,7 @@ import com.kotha.app.R
 import com.kotha.app.ui.components.OfflineBar
 import com.kotha.app.ui.components.TermsGateDialog
 import com.kotha.app.ui.components.VerifyEmailBar
+import com.kotha.app.ui.screens.calls.CallHistoryContent
 import com.kotha.app.ui.screens.chats.ChatListContent
 import com.kotha.app.ui.screens.chats.ChatListViewModel
 import com.kotha.app.ui.screens.chats.FindContactSheet
@@ -219,10 +220,7 @@ fun HomeScreen(
                     onOpenChat = onOpenChat,
                     modifier = Modifier.weight(1f)
                 )
-                HomeTab.Calls -> EmptyState(
-                    tab = HomeTab.Calls,
-                    modifier = Modifier.weight(1f)
-                )
+                HomeTab.Calls -> CallHistoryContent(modifier = Modifier.weight(1f))
             }
         }
     }
@@ -252,30 +250,5 @@ fun HomeScreen(
 
     if (needsTerms) {
         TermsGateDialog(onAgree = viewModel::acceptTerms, onDecline = viewModel::declineTerms)
-    }
-}
-
-@Composable
-private fun EmptyState(tab: HomeTab, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = tab.icon,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.outline
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = stringResource(tab.empty),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
     }
 }
