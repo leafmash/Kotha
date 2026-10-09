@@ -92,11 +92,12 @@ fun ChatHeader(
             }
         },
         actions = {
-            if (!menu.group && menu.peerUid.isNotEmpty() && !menu.blocked) {
-                IconButton(onClick = onVoiceCall) {
+            if (!menu.group) {
+                val callable = menu.peerUid.isNotEmpty() && !menu.blocked
+                IconButton(onClick = onVoiceCall, enabled = callable) {
                     Icon(Icons.Outlined.Call, contentDescription = stringResource(R.string.call_voice))
                 }
-                IconButton(onClick = onVideoCall) {
+                IconButton(onClick = onVideoCall, enabled = callable) {
                     Icon(Icons.Outlined.Videocam, contentDescription = stringResource(R.string.call_video))
                 }
             }
