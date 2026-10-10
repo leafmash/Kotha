@@ -12,10 +12,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.kotha.app.ui.theme.CovaTheme
 import com.kotha.app.ui.theme.brandBrush
 import com.kotha.app.ui.theme.pressScale
 
@@ -28,11 +30,13 @@ fun ActionOrb(
 ) {
     val source = remember { MutableInteractionSource() }
     val brush = brandBrush()
+    val glow = CovaTheme.colors.glow
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .size(48.dp)
+            .size(46.dp)
             .pressScale(source)
+            .shadow(8.dp, CircleShape, ambientColor = glow, spotColor = glow)
             .clip(CircleShape)
             .background(brush)
             .clickable(

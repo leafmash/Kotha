@@ -62,6 +62,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kotha.app.R
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import com.kotha.app.ui.theme.BrandFont
+import com.kotha.app.ui.theme.brandBrush
+import com.kotha.app.ui.theme.coveBackdrop
 import com.kotha.app.util.AppLanguage
 import com.kotha.app.util.Links
 
@@ -76,6 +85,7 @@ fun AuthScreen(viewModel: AuthViewModel = hiltViewModel()) {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .coveBackdrop()
             .systemBarsPadding()
             .imePadding(),
         contentAlignment = Alignment.TopCenter
@@ -96,8 +106,11 @@ fun AuthScreen(viewModel: AuthViewModel = hiltViewModel()) {
             )
             Text(
                 text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onBackground
+                style = MaterialTheme.typography.displaySmall.copy(
+                    fontFamily = BrandFont,
+                    fontWeight = FontWeight.Bold,
+                    brush = brandBrush()
+                )
             )
             Spacer(Modifier.height(4.dp))
             Text(
@@ -116,7 +129,8 @@ fun AuthScreen(viewModel: AuthViewModel = hiltViewModel()) {
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !state.busy,
                         singleLine = true,
-                        shape = MaterialTheme.shapes.medium,
+                        shape = RoundedCornerShape(18.dp),
+                colors = authFieldColors(),
                         label = { Text(stringResource(R.string.auth_name)) },
                         keyboardOptions = KeyboardOptions(
                             capitalization = KeyboardCapitalization.Words,
@@ -134,7 +148,8 @@ fun AuthScreen(viewModel: AuthViewModel = hiltViewModel()) {
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.busy,
                 singleLine = true,
-                shape = MaterialTheme.shapes.medium,
+                shape = RoundedCornerShape(18.dp),
+                colors = authFieldColors(),
                 label = { Text(stringResource(R.string.auth_email)) },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Email,
@@ -149,7 +164,8 @@ fun AuthScreen(viewModel: AuthViewModel = hiltViewModel()) {
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.busy,
                 singleLine = true,
-                shape = MaterialTheme.shapes.medium,
+                shape = RoundedCornerShape(18.dp),
+                colors = authFieldColors(),
                 label = { Text(stringResource(R.string.auth_password)) },
                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
@@ -181,26 +197,20 @@ fun AuthScreen(viewModel: AuthViewModel = hiltViewModel()) {
             }
 
             Spacer(Modifier.height(4.dp))
-            Button(
+            GradientButton(
+                text = stringResource(
+                    when {
+                        state.busy -> R.string.auth_wait
+                        state.signUp -> R.string.auth_sign_up
+                        else -> R.string.auth_sign_in
+                    }
+                ),
+                enabled = !state.busy,
                 onClick = {
                     focus.clearFocus()
                     viewModel.submit()
-                },
-                enabled = !state.busy,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-            ) {
-                Text(
-                    stringResource(
-                        when {
-                            state.busy -> R.string.auth_wait
-                            state.signUp -> R.string.auth_sign_up
-                            else -> R.string.auth_sign_in
-                        }
-                    )
-                )
-            }
+                }
+            )
 
             state.error?.let {
                 Spacer(Modifier.height(12.dp))
@@ -239,7 +249,8 @@ fun AuthScreen(viewModel: AuthViewModel = hiltViewModel()) {
                 enabled = !state.busy,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
+                    .height(54.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.White,
                     contentColor = Color(0xFF3C4043),
@@ -300,5 +311,36 @@ fun AuthScreen(viewModel: AuthViewModel = hiltViewModel()) {
                 Text(if (AppLanguage.code() == "en") "বাংলা" else "English")
             }
         }
+    }
+}
+
+@Composable
+private fun authFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    unfocusedBorderColor = Color.Transparent,
+    disabledBorderColor = Color.Transparent,
+    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+)
+
+@Composable
+private fun GradientButton(text: String, enabled: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(18.dp)
+    val brush = brandBrush()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp)
+            .clip(shape)
+            .background(brush, shape, alpha = if (enabled) 1f else 0.5f)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White
+        )
     }
 }

@@ -103,17 +103,19 @@ fun MessageBubble(
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         onLongPress()
     }
+    val tail = if (item.first) 6.dp else 9.dp
     val shape = RoundedCornerShape(
-        topStart = 18.dp,
-        topEnd = 18.dp,
-        bottomStart = if (!mine && item.first) 6.dp else 18.dp,
-        bottomEnd = if (mine && item.first) 6.dp else 18.dp
+        topStart = if (mine) 22.dp else tail,
+        topEnd = if (mine) tail else 22.dp,
+        bottomStart = if (mine) 22.dp else 9.dp,
+        bottomEnd = if (mine) 9.dp else 22.dp
     )
+    val accent = if (mine) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.primary
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = if (item.first) 6.dp else 0.dp)
+            .padding(top = if (item.first) 8.dp else 2.dp)
             .pointerInput(message.id, message.deleted, selecting) {
                 if (message.deleted || selecting) return@pointerInput
                 detectHorizontalDragGestures(
@@ -139,15 +141,22 @@ fun MessageBubble(
                 )
             }
     ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.Reply,
-            contentDescription = null,
+        Box(
             modifier = Modifier
                 .align(if (mine) Alignment.CenterEnd else Alignment.CenterStart)
-                .padding(horizontal = 12.dp)
-                .alpha((offset.value / threshold).coerceIn(0f, 1f)),
-            tint = MaterialTheme.colorScheme.primary
-        )
+                .padding(horizontal = 10.dp)
+                .alpha((offset.value / threshold).coerceIn(0f, 1f))
+                .size(34.dp)
+                .background(CovaTheme.colors.accentSoft, androidx.compose.foundation.shape.CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Reply,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -158,9 +167,13 @@ fun MessageBubble(
                 shape = shape,
                 color = container,
                 contentColor = content,
-                border = if (highlighted) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                border = when {
+                    highlighted -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                    !mine -> BorderStroke(1.dp, colors.hairline)
+                    else -> null
+                },
                 modifier = Modifier
-                    .widthIn(max = 300.dp)
+                    .widthIn(max = 312.dp)
                     .then(if (mine) Modifier.background(bubbleBackground, shape) else Modifier)
                     .semantics(mergeDescendants = true) {}
                     .combinedClickable(
@@ -172,7 +185,7 @@ fun MessageBubble(
                         }
                     )
             ) {
-                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                Column(modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 9.dp, bottom = 7.dp)) {
                     if (group && !mine) {
                         Text(
                             text = senderName.ifEmpty { stringResource(R.string.common_user) },
@@ -180,7 +193,8 @@ fun MessageBubble(
                             fontWeight = FontWeight.Bold,
                             color = avatarColor(message.from),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(bottom = 2.dp)
                         )
                     }
                     if (message.forwarded && !message.deleted) {
@@ -195,6 +209,7 @@ fun MessageBubble(
                         QuoteBlock(
                             text = message.replyText,
                             content = content,
+                            accent = accent,
                             onClick = { message.replyId?.let(onQuoteClick) }
                         )
                     }
@@ -223,26 +238,26 @@ fun MessageBubble(
 }
 
 @Composable
-private fun QuoteBlock(text: String, content: Color, onClick: () -> Unit) {
+private fun QuoteBlock(text: String, content: Color, accent: Color, onClick: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = content.copy(alpha = 0.10f),
+        shape = RoundedCornerShape(12.dp),
+        color = content.copy(alpha = 0.12f),
         modifier = Modifier
-            .padding(bottom = 4.dp)
+            .padding(top = 2.dp, bottom = 6.dp)
             .clickable(onClick = onClick)
     ) {
         Row(modifier = Modifier.height(IntrinsicSize.Min)) {
             Box(
                 modifier = Modifier
-                    .width(3.dp)
+                    .width(4.dp)
                     .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.primary)
+                    .background(accent)
             )
             Text(
                 text = text,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                 style = MaterialTheme.typography.bodySmall,
-                color = content.copy(alpha = 0.85f),
+                color = content.copy(alpha = 0.9f),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -303,12 +318,12 @@ private fun BubbleBody(
 private fun ReactionChip(message: Message, content: Color) {
     val picks = message.reactions.values
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = content.copy(alpha = 0.12f),
-        modifier = Modifier.padding(top = 4.dp)
+        shape = RoundedCornerShape(14.dp),
+        color = content.copy(alpha = 0.14f),
+        modifier = Modifier.padding(top = 6.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -327,7 +342,7 @@ private fun ReactionChip(message: Message, content: Color) {
 @Composable
 private fun MetaRow(message: Message, mine: Boolean, content: Color, modifier: Modifier = Modifier) {
     Row(
-        modifier = modifier.padding(top = 2.dp),
+        modifier = modifier.padding(top = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -335,13 +350,13 @@ private fun MetaRow(message: Message, mine: Boolean, content: Color, modifier: M
             Text(
                 text = stringResource(R.string.msg_edited),
                 style = MaterialTheme.typography.labelSmall,
-                color = content.copy(alpha = 0.65f)
+                color = content.copy(alpha = 0.72f)
             )
         }
         Text(
             text = Format.clock(message.atMs),
             style = MaterialTheme.typography.labelSmall,
-            color = content.copy(alpha = 0.65f)
+            color = content.copy(alpha = 0.72f)
         )
         if (mine && !message.deleted) {
             val seen = message.status == "seen"
@@ -353,8 +368,8 @@ private fun MetaRow(message: Message, mine: Boolean, content: Color, modifier: M
                     else -> Icons.Filled.Done
                 },
                 contentDescription = null,
-                modifier = Modifier.size(15.dp),
-                tint = if (seen) CovaTheme.colors.tick else content.copy(alpha = 0.65f)
+                modifier = Modifier.size(16.dp),
+                tint = if (seen) CovaTheme.colors.tick else content.copy(alpha = 0.72f)
             )
         }
     }

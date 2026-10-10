@@ -281,7 +281,7 @@ fun ChatScreen(
                 state = listState,
                 reverseLayout = true,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
             ) {
                 items(items, key = { it.key }) { item ->
                     when (item) {
@@ -290,8 +290,20 @@ fun ChatScreen(
                         is ChatItem.System -> item.message.sys?.let {
                             SystemEventRow(it, item.message.from, viewModel.uid, users)
                         }
-                        is ChatItem.Call -> item.message.callLog?.let {
-                            CallEventRow(it, item.mine, item.message.atMs)
+                        is ChatItem.Call -> item.message.callLog?.let { callLog ->
+                            val callable = !group && menu.peerUid.isNotEmpty() && !menu.blocked
+                            val callBack: (() -> Unit)? = if (callable) {
+                                val action: () -> Unit = { startCall(viewModel.chatId, menu.peerUid, callLog.video) }
+                                action
+                            } else {
+                                null
+                            }
+                            CallEventRow(
+                                log = callLog,
+                                mine = item.mine,
+                                atMs = item.message.atMs,
+                                onCallBack = callBack
+                            )
                         }
                         is ChatItem.Bubble -> Box(
                             modifier = Modifier
@@ -532,7 +544,12 @@ fun ChatScreen(
 @Composable
 private fun ScrollDownButton(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     AnimatedVisibility(visible = visible, modifier = modifier) {
-        SmallFloatingActionButton(onClick = onClick) {
+        SmallFloatingActionButton(
+            onClick = onClick,
+            shape = androidx.compose.foundation.shape.CircleShape,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            contentColor = MaterialTheme.colorScheme.primary
+        ) {
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowDown,
                 contentDescription = stringResource(R.string.chat_scroll_down)

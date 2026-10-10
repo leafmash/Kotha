@@ -1,7 +1,22 @@
 package com.kotha.app.ui.screens.home
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import com.kotha.app.ui.theme.BrandFont
+import com.kotha.app.ui.theme.brandBrush
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -119,17 +134,35 @@ fun HomeScreen(
                 title = {
                     Text(
                         text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.titleLarge
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontFamily = BrandFont,
+                            fontWeight = FontWeight.Bold,
+                            brush = brandBrush()
+                        )
                     )
                 },
                 actions = {
-                    IconButton(onClick = { showFind = true }) {
-                        Icon(Icons.Filled.PersonAdd, contentDescription = stringResource(R.string.common_add_contact))
+                    if (tabs[selected] == HomeTab.Calls) {
+                        HeaderAction(onClick = { showFind = true }) {
+                            Icon(
+                                Icons.Filled.PersonAdd,
+                                contentDescription = stringResource(R.string.common_add_contact),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.common_more))
+                    HeaderAction(onClick = { menuOpen = true }) {
+                        Icon(
+                            Icons.Filled.MoreVert,
+                            contentDescription = stringResource(R.string.common_more),
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.menu_new_group)) },
                             leadingIcon = { Icon(Icons.Outlined.GroupAdd, contentDescription = null) },
@@ -155,6 +188,7 @@ fun HomeScreen(
                             }
                         )
                     }
+                    Spacer(Modifier.size(8.dp))
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
@@ -162,39 +196,71 @@ fun HomeScreen(
             )
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                tabs.forEachIndexed { index, tab ->
-                    NavigationBarItem(
-                        selected = selected == index,
-                        onClick = {
-                            if (selected != index) {
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                selected = index
-                            }
-                        },
-                        icon = {
-                            val unread = if (tab == HomeTab.Chats) listBase.totalUnread else 0
-                            BadgedBox(
-                                badge = {
-                                    if (unread > 0) {
-                                        Badge(
-                                            containerColor = CovaTheme.colors.lantern,
-                                            contentColor = CovaTheme.colors.onLantern
-                                        ) { Text(if (unread > 99) "99+" else Format.number(unread)) }
-                                    }
+            Column {
+                HorizontalDivider(color = CovaTheme.colors.hairline)
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    tonalElevation = 0.dp
+                ) {
+                    tabs.forEachIndexed { index, tab ->
+                        NavigationBarItem(
+                            selected = selected == index,
+                            onClick = {
+                                if (selected != index) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    selected = index
                                 }
-                            ) {
-                                Icon(
-                                    imageVector = if (selected == index) tab.selectedIcon else tab.icon,
-                                    contentDescription = null
+                            },
+                            icon = {
+                                val unread = if (tab == HomeTab.Chats) listBase.totalUnread else 0
+                                BadgedBox(
+                                    badge = {
+                                        if (unread > 0) {
+                                            Badge(
+                                                containerColor = MaterialTheme.colorScheme.primary,
+                                                contentColor = MaterialTheme.colorScheme.onPrimary
+                                            ) { Text(if (unread > 99) "99+" else Format.number(unread)) }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = if (selected == index) tab.selectedIcon else tab.icon,
+                                        contentDescription = null
+                                    )
+                                }
+                            },
+                            label = {
+                                Text(
+                                    text = stringResource(tab.label),
+                                    fontWeight = if (selected == index) FontWeight.Bold else FontWeight.Medium
                                 )
-                            }
-                        },
-                        label = { Text(stringResource(tab.label)) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                indicatorColor = CovaTheme.colors.accentSoft
+                            )
+                        )
+                    }
+                }
+            }
+        },
+        floatingActionButton = {
+            val tab = tabs[selected]
+            if (tab != HomeTab.Calls) {
+                FloatingActionButton(
+                    onClick = { if (tab == HomeTab.Chats) showFind = true else showNewGroup = true },
+                    shape = RoundedCornerShape(20.dp),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = if (tab == HomeTab.Chats) Icons.Filled.PersonAdd else Icons.Outlined.GroupAdd,
+                        contentDescription = stringResource(
+                            if (tab == HomeTab.Chats) R.string.common_add_contact else R.string.menu_new_group
                         )
                     )
                 }
@@ -260,5 +326,20 @@ fun HomeScreen(
 
     if (needsTerms) {
         TermsGateDialog(onAgree = viewModel::acceptTerms, onDecline = viewModel::declineTerms)
+    }
+}
+
+@Composable
+private fun HeaderAction(onClick: () -> Unit, content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .padding(start = 8.dp)
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
     }
 }

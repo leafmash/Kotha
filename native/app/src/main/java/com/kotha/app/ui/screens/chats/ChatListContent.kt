@@ -13,11 +13,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.GroupAdd
+import androidx.compose.material.icons.outlined.MarkChatUnread
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.SearchOff
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.kotha.app.ui.components.EmptyState
+import com.kotha.app.ui.theme.brandBrush
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
@@ -27,10 +39,8 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Unarchive
-import androidx.compose.material3.Badge
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -38,6 +48,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -151,9 +162,19 @@ fun ChatListContent(
             onValueChange = { query = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+                .padding(horizontal = 16.dp, vertical = 6.dp),
             singleLine = true,
-            shape = CircleShape,
+            shape = RoundedCornerShape(18.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                focusedLeadingIconColor = MaterialTheme.colorScheme.primary,
+                unfocusedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
             placeholder = { Text(stringResource(R.string.list_search)) },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
             trailingIcon = {
@@ -168,51 +189,54 @@ fun ChatListContent(
             Row(
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                FilterChip(
+                FilterPill(
+                    label = stringResource(R.string.common_all),
                     selected = filter == ListFilter.All,
-                    onClick = { filter = ListFilter.All },
-                    label = { Text(stringResource(R.string.common_all)) }
+                    onClick = { filter = ListFilter.All }
                 )
-                FilterChip(
+                FilterPill(
+                    label = stringResource(R.string.common_unread),
                     selected = filter == ListFilter.Unread,
-                    onClick = { filter = ListFilter.Unread },
-                    label = { Text(stringResource(R.string.common_unread)) }
+                    onClick = { filter = ListFilter.Unread }
                 )
-                FilterChip(
+                FilterPill(
+                    label = stringResource(R.string.common_archived) + if (base.archivedUnread) " •" else "",
                     selected = filter == ListFilter.Archived,
-                    onClick = { filter = ListFilter.Archived },
-                    label = {
-                        Text(
-                            text = stringResource(R.string.common_archived) + if (base.archivedUnread) " •" else ""
-                        )
-                    }
+                    onClick = { filter = ListFilter.Archived }
                 )
             }
         }
         Box(modifier = Modifier.weight(1f)) {
             when {
                 !base.ready -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                rows.isEmpty() -> Text(
-                    text = stringResource(
-                        when {
-                            term.isNotEmpty() -> R.string.list_no_match
-                            groupsOnly -> R.string.list_no_groups
-                            filter == ListFilter.Archived -> R.string.list_no_archived
-                            filter == ListFilter.Unread -> R.string.list_no_unread
-                            else -> R.string.list_no_chats
-                        }
-                    ),
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(horizontal = 40.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                rows.isEmpty() -> {
+                    val emptyIcon: ImageVector = when {
+                        term.isNotEmpty() -> Icons.Outlined.SearchOff
+                        groupsOnly -> Icons.Outlined.GroupAdd
+                        filter == ListFilter.Archived -> Icons.Outlined.Inventory2
+                        filter == ListFilter.Unread -> Icons.Outlined.MarkChatUnread
+                        else -> Icons.Outlined.ChatBubbleOutline
+                    }
+                    EmptyState(
+                        icon = emptyIcon,
+                        text = stringResource(
+                            when {
+                                term.isNotEmpty() -> R.string.list_no_match
+                                groupsOnly -> R.string.list_no_groups
+                                filter == ListFilter.Archived -> R.string.list_no_archived
+                                filter == ListFilter.Unread -> R.string.list_no_unread
+                                else -> R.string.list_no_chats
+                            }
+                        )
+                    )
+                }
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
                     items(rows, key = { it.id }) { row ->
                         ChatRow(
                             modifier = Modifier.animateItem(),
@@ -227,6 +251,31 @@ fun ChatListContent(
     }
 }
 
+@Composable
+private fun FilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    val shape = CircleShape
+    Box(
+        modifier = Modifier
+            .clip(shape)
+            .then(
+                if (selected) {
+                    Modifier.background(brandBrush(), shape)
+                } else {
+                    Modifier.background(MaterialTheme.colorScheme.surfaceContainer, shape)
+                }
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChatRow(row: ChatRowUi, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -235,7 +284,7 @@ private fun ChatRow(row: ChatRowUi, onClick: () -> Unit, onLongClick: () -> Unit
     val preview = buildAnnotatedString {
         when {
             row.draft.isNotEmpty() -> {
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)) {
                     append(stringResource(R.string.list_draft_prefix))
                 }
                 append(row.draft)
@@ -252,15 +301,24 @@ private fun ChatRow(row: ChatRowUi, onClick: () -> Unit, onLongClick: () -> Unit
         }
     }
     val emphasized = row.unread > 0
+    val rowShape = RoundedCornerShape(20.dp)
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .clip(rowShape)
+            .then(
+                if (emphasized && !row.muted) {
+                    Modifier.background(CovaTheme.colors.accentSoft.copy(alpha = 0.55f), rowShape)
+                } else {
+                    Modifier
+                }
+            )
             .semantics(mergeDescendants = true) {}
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Avatar(name = row.name, photo = row.photo, size = 52.dp, online = row.online)
+        Avatar(name = row.name, photo = row.photo, size = 54.dp, online = row.online)
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -275,16 +333,19 @@ private fun ChatRow(row: ChatRowUi, onClick: () -> Unit, onLongClick: () -> Unit
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = Format.listTime(row.timeMs),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (emphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (emphasized) FontWeight.Bold else FontWeight.Normal,
+                    color = if (emphasized && !row.muted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            Spacer(Modifier.height(3.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = preview,
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (emphasized) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (emphasized) FontWeight.Medium else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -308,15 +369,37 @@ private fun ChatRow(row: ChatRowUi, onClick: () -> Unit, onLongClick: () -> Unit
                 }
                 if (row.unread > 0) {
                     Spacer(Modifier.width(8.dp))
-                    Badge(
-                        containerColor = if (row.muted) MaterialTheme.colorScheme.outline else CovaTheme.colors.lantern,
-                        contentColor = if (row.muted) MaterialTheme.colorScheme.surface else CovaTheme.colors.onLantern
-                    ) {
-                        Text(if (row.unread > 99) "99+" else Format.number(row.unread))
-                    }
+                    UnreadBadge(count = row.unread, muted = row.muted)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun UnreadBadge(count: Int, muted: Boolean) {
+    val shape = CircleShape
+    Box(
+        modifier = Modifier
+            .height(22.dp)
+            .widthIn(min = 22.dp)
+            .clip(shape)
+            .then(
+                if (muted) {
+                    Modifier.background(MaterialTheme.colorScheme.outline, shape)
+                } else {
+                    Modifier.background(brandBrush(), shape)
+                }
+            )
+            .padding(horizontal = 7.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = if (count > 99) "99+" else Format.number(count),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
     }
 }
 

@@ -33,6 +33,9 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import com.kotha.app.R
 import com.kotha.app.notify.NotificationIds
 import com.kotha.app.util.BatteryOptimization
+import com.kotha.app.ui.components.SettingsCard
+import com.kotha.app.ui.components.SettingsIconTile
+import com.kotha.app.ui.components.SettingsSectionLabel
 
 @Composable
 fun NotificationSettingsSection() {
@@ -43,12 +46,8 @@ fun NotificationSettingsSection() {
     val unrestricted = remember(refresh) { BatteryOptimization.isIgnoring(context) }
     val autostart = remember { BatteryOptimization.hasAutostartSettings() }
 
-    Text(
-        text = stringResource(R.string.settings_notifications),
-        modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary
-    )
+    SettingsSectionLabel(stringResource(R.string.settings_notifications))
+    SettingsCard {
     NotificationRow(
         icon = Icons.Filled.Notifications,
         title = stringResource(R.string.settings_notifications_app),
@@ -80,6 +79,7 @@ fun NotificationSettingsSection() {
             value = ""
         ) { BatteryOptimization.openAutostartSettings(context) }
     }
+    }
 }
 
 @Composable
@@ -88,11 +88,11 @@ private fun NotificationRow(icon: ImageVector, title: String, value: String, onC
         modifier = Modifier
             .fillMaxWidth()
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.width(20.dp))
+        SettingsIconTile(icon)
+        Spacer(Modifier.width(16.dp))
         Text(
             text = title,
             modifier = Modifier.weight(1f),

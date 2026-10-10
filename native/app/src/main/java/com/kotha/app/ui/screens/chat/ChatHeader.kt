@@ -2,6 +2,8 @@ package com.kotha.app.ui.screens.chat
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.HorizontalDivider
+import com.kotha.app.ui.theme.CovaTheme
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
@@ -59,6 +61,7 @@ fun ChatHeader(
 ) {
     val (statusText, live) = statusLabel(header.status)
     var menuOpen by remember { mutableStateOf(false) }
+    Column {
     TopAppBar(
         navigationIcon = {
             IconButton(onClick = onBack) {
@@ -70,12 +73,13 @@ fun ChatHeader(
                 modifier = Modifier.clickable(role = Role.Button, onClick = onOpenInfo),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Avatar(name = header.name, photo = header.photo, size = 40.dp, online = header.online)
+                Avatar(name = header.name, photo = header.photo, size = 42.dp, online = header.online)
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
                         text = header.name.ifEmpty { stringResource(R.string.common_user) },
                         style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -83,7 +87,7 @@ fun ChatHeader(
                         Text(
                             text = statusText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (live) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (live) CovaTheme.colors.success else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -95,10 +99,18 @@ fun ChatHeader(
             if (!menu.group) {
                 val callable = menu.peerUid.isNotEmpty() && !menu.blocked
                 IconButton(onClick = onVoiceCall, enabled = callable) {
-                    Icon(Icons.Outlined.Call, contentDescription = stringResource(R.string.call_voice))
+                    Icon(
+                        Icons.Outlined.Call,
+                        contentDescription = stringResource(R.string.call_voice),
+                        tint = if (callable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    )
                 }
                 IconButton(onClick = onVideoCall, enabled = callable) {
-                    Icon(Icons.Outlined.Videocam, contentDescription = stringResource(R.string.call_video))
+                    Icon(
+                        Icons.Outlined.Videocam,
+                        contentDescription = stringResource(R.string.call_video),
+                        tint = if (callable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    )
                 }
             }
             IconButton(onClick = { menuOpen = true }) {
@@ -172,8 +184,10 @@ fun ChatHeader(
                 )
             }
         },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
     )
+    HorizontalDivider(color = CovaTheme.colors.hairline)
+    }
 }
 
 @Composable

@@ -10,6 +10,9 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.material3.HorizontalDivider
+import com.kotha.app.ui.theme.CovaTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,8 +77,9 @@ fun Composer(
     onCancelRecording: () -> Unit
 ) {
     var text by rememberSaveable(chatId) { mutableStateOf(initialText) }
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+    Surface(color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.navigationBarsPadding().imePadding()) {
+            HorizontalDivider(color = CovaTheme.colors.hairline)
             AnimatedVisibility(visible = replyTo != null) {
                 ReplyBar(text = replyTo?.text.orEmpty(), onCancel = onCancelReply)
             }
@@ -88,7 +92,7 @@ fun Composer(
                 )
             } else {
                 Row(
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -96,15 +100,16 @@ fun Composer(
                         Icon(
                             imageVector = Icons.Filled.AttachFile,
                             contentDescription = stringResource(R.string.attach_title),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
+                            .border(1.dp, CovaTheme.colors.hairline, RoundedCornerShape(26.dp))
+                            .padding(horizontal = 18.dp, vertical = 12.dp)
                     ) {
                         BasicTextField(
                             value = text,
@@ -180,8 +185,9 @@ private fun ReplyBar(text: String, onCancel: () -> Unit) {
     ) {
         Box(
             modifier = Modifier
-                .width(3.dp)
+                .width(4.dp)
                 .fillMaxHeight()
+                .clip(RoundedCornerShape(2.dp))
                 .background(MaterialTheme.colorScheme.primary)
         )
         Column(modifier = Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 2.dp)) {
@@ -206,7 +212,7 @@ private fun ReplyBar(text: String, onCancel: () -> Unit) {
 
 @Composable
 fun InfoBar(text: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+    Surface(color = MaterialTheme.colorScheme.background) {
         Row(
             modifier = Modifier
                 .navigationBarsPadding()

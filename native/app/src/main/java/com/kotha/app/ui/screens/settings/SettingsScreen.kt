@@ -56,6 +56,14 @@ import com.kotha.app.ui.components.ChoiceDialog
 import com.kotha.app.ui.components.ChoiceOption
 import com.kotha.app.ui.components.ConfirmDialog
 import com.kotha.app.ui.components.DeleteAccountDialog
+import com.kotha.app.ui.components.SettingsCard
+import com.kotha.app.ui.components.SettingsIconTile
+import com.kotha.app.ui.components.SettingsSectionLabel
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import com.kotha.app.ui.theme.CovaTheme
 import com.kotha.app.util.AppLanguage
 import com.kotha.app.util.Format
 import com.kotha.app.util.Links
@@ -101,14 +109,19 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
         ) {
+            val profileShape = RoundedCornerShape(28.dp)
             Row(
                 modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
                     .fillMaxWidth()
+                    .clip(profileShape)
+                    .background(CovaTheme.colors.accentSoft)
+                    .border(1.dp, CovaTheme.colors.hairline, profileShape)
                     .clickable(role = Role.Button, onClick = onOpenProfile)
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                    .padding(horizontal = 18.dp, vertical = 18.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Avatar(name = name, photo = profile?.photo.orEmpty(), size = 64.dp)
+                Avatar(name = name, photo = profile?.photo.orEmpty(), size = 68.dp)
                 Spacer(Modifier.width(16.dp))
                 Column {
                     Text(
@@ -128,8 +141,8 @@ fun SettingsScreen(
                     }
                 }
             }
-            HorizontalDivider()
-            SectionLabel(R.string.settings_preferences)
+            SettingsSectionLabel(stringResource(R.string.settings_preferences))
+            SettingsCard {
             SettingRow(
                 icon = Icons.Filled.Language,
                 title = stringResource(R.string.settings_language),
@@ -145,17 +158,18 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_font_size),
                 value = stringResource(fontLabel(fontScale))
             ) { dialog = "font" }
-            HorizontalDivider(Modifier.padding(top = 8.dp))
-            SectionLabel(R.string.settings_privacy)
+            }
+            SettingsSectionLabel(stringResource(R.string.settings_privacy))
+            SettingsCard {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(role = Role.Switch) { viewModel.setReadReceipts(!receipts) }
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Filled.DoneAll, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.width(20.dp))
+                SettingsIconTile(Icons.Filled.DoneAll)
+                Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_read_receipts), style = MaterialTheme.typography.bodyLarge)
                     Text(
@@ -172,10 +186,10 @@ fun SettingsScreen(
                 value = if (blockedCount > 0) Format.number(blockedCount) else "",
                 onClick = onOpenBlocked
             )
-            HorizontalDivider(Modifier.padding(top = 8.dp))
+            }
             NotificationSettingsSection()
-            HorizontalDivider(Modifier.padding(top = 8.dp))
-            SectionLabel(R.string.settings_about)
+            SettingsSectionLabel(stringResource(R.string.settings_about))
+            SettingsCard {
             SettingRow(
                 icon = Icons.AutoMirrored.Filled.Notes,
                 title = stringResource(R.string.legal_terms),
@@ -186,8 +200,9 @@ fun SettingsScreen(
                 title = stringResource(R.string.legal_privacy),
                 value = ""
             ) { Links.openLegal(context, "privacy") }
-            HorizontalDivider(Modifier.padding(top = 8.dp))
-            SectionLabel(R.string.settings_account)
+            }
+            SettingsSectionLabel(stringResource(R.string.settings_account))
+            SettingsCard {
             SettingRow(
                 icon = Icons.AutoMirrored.Filled.Logout,
                 title = stringResource(R.string.menu_sign_out),
@@ -199,7 +214,8 @@ fun SettingsScreen(
                 value = "",
                 danger = true
             ) { dialog = "delete" }
-            Spacer(Modifier.height(24.dp))
+            }
+            Spacer(Modifier.height(32.dp))
         }
     }
 
@@ -264,16 +280,6 @@ private fun fontLabel(scale: Float): Int = when (scale) {
 }
 
 @Composable
-private fun SectionLabel(label: Int) {
-    Text(
-        text = stringResource(label),
-        modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary
-    )
-}
-
-@Composable
 private fun SettingRow(
     icon: ImageVector,
     title: String,
@@ -281,16 +287,15 @@ private fun SettingRow(
     danger: Boolean = false,
     onClick: () -> Unit
 ) {
-    val tint: Color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = tint)
-        Spacer(Modifier.width(20.dp))
+        SettingsIconTile(icon = icon, danger = danger)
+        Spacer(Modifier.width(16.dp))
         Text(
             text = title,
             modifier = Modifier.weight(1f),
