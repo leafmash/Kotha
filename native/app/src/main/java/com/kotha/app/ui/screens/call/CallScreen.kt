@@ -37,7 +37,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -283,16 +282,20 @@ private fun RoundButton(
     modifier: Modifier = Modifier,
     size: Int = 60
 ) {
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = container,
-        contentColor = content,
-        modifier = modifier.size(size.dp)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(size.dp)
+            .clip(CircleShape)
+            .background(container)
+            .clickable(onClick = onClick)
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(imageVector = icon, contentDescription = label, modifier = Modifier.size((size / 2.4f).dp))
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = content,
+            modifier = Modifier.size((size / 2.4f).dp)
+        )
     }
 }
 
