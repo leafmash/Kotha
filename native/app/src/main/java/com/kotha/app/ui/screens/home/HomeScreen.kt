@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -67,6 +68,7 @@ import com.kotha.app.ui.screens.chats.ChatListViewModel
 import com.kotha.app.ui.screens.chats.FindContactSheet
 import com.kotha.app.ui.screens.group.GroupPickerSheet
 import com.kotha.app.ui.screens.group.PickerMode
+import com.kotha.app.ui.theme.CovaTheme
 import com.kotha.app.util.Format
 
 private enum class HomeTab(
@@ -175,7 +177,10 @@ fun HomeScreen(
                             BadgedBox(
                                 badge = {
                                     if (unread > 0) {
-                                        Badge { Text(if (unread > 99) "99+" else Format.number(unread)) }
+                                        Badge(
+                                            containerColor = CovaTheme.colors.lantern,
+                                            contentColor = CovaTheme.colors.onLantern
+                                        ) { Text(if (unread > 99) "99+" else Format.number(unread)) }
                                     }
                                 }
                             ) {
@@ -185,7 +190,12 @@ fun HomeScreen(
                                 )
                             }
                         },
-                        label = { Text(stringResource(tab.label)) }
+                        label = { Text(stringResource(tab.label)) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                        )
                     )
                 }
             }

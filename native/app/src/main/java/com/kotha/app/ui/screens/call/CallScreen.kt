@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,7 +50,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
@@ -64,6 +71,9 @@ import com.kotha.app.data.call.AudioRoute
 import com.kotha.app.data.call.CallPhase
 import com.kotha.app.data.call.CallState
 import com.kotha.app.ui.components.Avatar
+import com.kotha.app.ui.components.PulseRings
+import com.kotha.app.ui.theme.CallPalette
+import com.kotha.app.ui.theme.pressScale
 import com.kotha.app.util.Format
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -99,9 +109,11 @@ fun CallScreen(onAnswer: () -> Unit, viewModel: CallViewModel = hiltViewModel())
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF101418))
+            .background(
+                Brush.verticalGradient(listOf(CallPalette.Night, CallPalette.Deep, CallPalette.Night))
+            )
             .clickable(
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
                 if (videoActive && controlsVisible) controlsVisible = false else touch += 1
@@ -162,18 +174,20 @@ fun CallScreen(onAnswer: () -> Unit, viewModel: CallViewModel = hiltViewModel())
 
 @Composable
 private fun Backdrop(call: CallState, name: String, photo: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
-    ) {
+    val ringing = call.phase == CallPhase.Dialing ||
+        call.phase == CallPhase.Ringing ||
+        call.phase == CallPhase.Incoming ||
+        call.phase == CallPhase.Connecting
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.align(Alignment.Center).padding(bottom = 120.dp),
+            modifier = Modifier.align(Alignment.Center).padding(bottom = 96.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Avatar(name = name, photo = photo, size = 144.dp)
+            PulseRings(active = ringing, color = CallPalette.Glow, core = 144.dp) {
+                Avatar(name = name, photo = photo, size = 144.dp)
+            }
             if (call.peerCameraOff && call.video) {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     text = stringResource(R.string.call_camera_off),
                     style = MaterialTheme.typography.bodyMedium,
@@ -202,14 +216,16 @@ private fun Header(call: CallState, name: String, tick: Long, overVideo: Boolean
             style = MaterialTheme.typography.headlineSmall,
             color = Color.White,
             textAlign = TextAlign.Center,
-            maxLines = 1
+            maxLines = 1,
+            modifier = Modifier.semantics { heading() }
         )
         Spacer(Modifier.height(6.dp))
         Text(
             text = status,
             style = MaterialTheme.typography.bodyLarge,
             color = Color.White.copy(alpha = 0.85f),
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
         )
     }
 }
@@ -282,13 +298,21 @@ private fun RoundButton(
     modifier: Modifier = Modifier,
     size: Int = 60
 ) {
+    val source = remember { MutableInteractionSource() }
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(size.dp)
+            .pressScale(source)
             .clip(CircleShape)
             .background(container)
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = source,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = label,
+                onClick = onClick
+            )
     ) {
         Icon(
             imageVector = icon,
@@ -312,13 +336,13 @@ private fun IncomingControls(onAnswer: () -> Unit, onDecline: () -> Unit) {
         LabeledButton(
             icon = Icons.Filled.CallEnd,
             label = stringResource(R.string.call_decline),
-            container = Color(0xFFE53935),
+            container = CallPalette.Reject,
             onClick = onDecline
         )
         LabeledButton(
             icon = Icons.Filled.Call,
             label = stringResource(R.string.call_answer),
-            container = Color(0xFF2E9E5B),
+            container = CallPalette.Accept,
             onClick = onAnswer
         )
     }
@@ -410,7 +434,7 @@ private fun ActiveControls(
             icon = Icons.Filled.CallEnd,
             label = stringResource(R.string.call_end),
             onClick = onEnd,
-            container = Color(0xFFE53935),
+            container = CallPalette.Reject,
             content = Color.White,
             size = 72
         )

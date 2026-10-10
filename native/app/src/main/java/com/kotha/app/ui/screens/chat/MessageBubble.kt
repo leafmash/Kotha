@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,6 +63,7 @@ import com.kotha.app.ui.screens.chat.media.MediaCallbacks
 import com.kotha.app.ui.screens.chat.media.VisualBody
 import com.kotha.app.ui.screens.chat.media.VoiceBody
 import com.kotha.app.ui.theme.CovaTheme
+import com.kotha.app.ui.theme.bubbleBrush
 import com.kotha.app.util.Format
 import com.kotha.app.util.MessageText
 import kotlin.math.roundToInt
@@ -84,7 +86,9 @@ fun MessageBubble(
     val message = item.message
     val mine = item.mine
     val colors = CovaTheme.colors
-    val container = if (mine) colors.bubbleMine else colors.bubbleTheirs
+    val container = if (mine) Color.Transparent else colors.bubbleTheirs
+    val bubbleBackground = bubbleBrush()
+    val actionsLabel = stringResource(R.string.a11y_message_actions)
     val content = if (mine) colors.onBubbleMine else colors.onBubbleTheirs
     val density = LocalDensity.current
     val threshold = with(density) { 56.dp.toPx() }
@@ -157,8 +161,11 @@ fun MessageBubble(
                 border = if (highlighted) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
                 modifier = Modifier
                     .widthIn(max = 300.dp)
+                    .then(if (mine) Modifier.background(bubbleBackground, shape) else Modifier)
+                    .semantics(mergeDescendants = true) {}
                     .combinedClickable(
                         onClick = onClick,
+                        onLongClickLabel = actionsLabel,
                         onLongClick = {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             onLongPress()

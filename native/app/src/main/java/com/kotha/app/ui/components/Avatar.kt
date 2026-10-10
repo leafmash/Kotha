@@ -72,7 +72,7 @@ fun Avatar(
                     .size(size * 0.3f)
                     .background(MaterialTheme.colorScheme.background, CircleShape)
                     .padding(size * 0.05f)
-                    .background(CovaTheme.colors.success, CircleShape)
+                    .background(CovaTheme.colors.lantern, CircleShape)
             )
         }
     }

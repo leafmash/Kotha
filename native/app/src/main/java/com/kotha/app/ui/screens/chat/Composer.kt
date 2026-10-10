@@ -1,6 +1,14 @@
 package com.kotha.app.ui.screens.chat
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,7 +31,6 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +54,9 @@ import androidx.compose.ui.unit.dp
 import com.kotha.app.R
 import com.kotha.app.data.chat.ReplyRef
 import com.kotha.app.data.media.RecordingState
+import com.kotha.app.ui.components.ActionOrb
+import com.kotha.app.ui.theme.CovaMotion
+import com.kotha.app.ui.theme.rememberReducedMotion
 import com.kotha.app.ui.screens.chat.media.RecordingBar
 
 @Composable
@@ -121,25 +131,35 @@ fun Composer(
                             }
                         )
                     }
-                    if (text.isBlank()) {
-                        FilledIconButton(onClick = onStartRecording, modifier = Modifier.padding(end = 4.dp)) {
-                            Icon(
-                                imageVector = Icons.Filled.Mic,
-                                contentDescription = stringResource(R.string.voice_record)
+                    val reduced = rememberReducedMotion()
+                    AnimatedContent(
+                        targetState = text.isBlank(),
+                        transitionSpec = {
+                            if (reduced) {
+                                fadeIn(snap()) togetherWith fadeOut(snap())
+                            } else {
+                                (fadeIn(tween(CovaMotion.Quick)) + scaleIn(initialScale = 0.6f)) togetherWith
+                                    (fadeOut(tween(CovaMotion.Quick)) + scaleOut(targetScale = 0.6f))
+                            }
+                        },
+                        modifier = Modifier.padding(end = 4.dp),
+                        label = "composerAction"
+                    ) { blank ->
+                        if (blank) {
+                            ActionOrb(
+                                icon = Icons.Filled.Mic,
+                                description = stringResource(R.string.voice_record),
+                                onClick = onStartRecording
                             )
-                        }
-                    } else {
-                        FilledIconButton(
-                            onClick = {
-                                val value = text
-                                text = ""
-                                onSend(value)
-                            },
-                            modifier = Modifier.padding(end = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = stringResource(R.string.chat_send)
+                        } else {
+                            ActionOrb(
+                                icon = Icons.AutoMirrored.Filled.Send,
+                                description = stringResource(R.string.chat_send),
+                                onClick = {
+                                    val value = text
+                                    text = ""
+                                    onSend(value)
+                                }
                             )
                         }
                     }

@@ -88,6 +88,7 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.exifinterface)
     implementation(libs.stream.webrtc)
+    implementation(libs.androidx.profileinstaller)
     implementation("me.leolin:ShortcutBadger:1.1.22@aar")
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)

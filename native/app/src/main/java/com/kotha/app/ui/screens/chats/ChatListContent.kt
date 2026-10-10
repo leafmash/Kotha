@@ -51,6 +51,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +64,7 @@ import com.kotha.app.R
 import com.kotha.app.ui.components.Avatar
 import com.kotha.app.ui.components.ConfirmDialog
 import com.kotha.app.ui.screens.chat.MuteDialog
+import com.kotha.app.ui.theme.CovaTheme
 import com.kotha.app.util.Format
 import com.kotha.app.util.StoredText
 
@@ -213,6 +215,7 @@ fun ChatListContent(
                 else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(rows, key = { it.id }) { row ->
                         ChatRow(
+                            modifier = Modifier.animateItem(),
                             row = row,
                             onClick = { onOpenChat(row.id) },
                             onLongClick = { actionRow = row }
@@ -226,7 +229,7 @@ fun ChatListContent(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ChatRow(row: ChatRowUi, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun ChatRow(row: ChatRowUi, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val stored = StoredText.display(context, row.lastMessage)
     val preview = buildAnnotatedString {
@@ -250,8 +253,9 @@ private fun ChatRow(row: ChatRowUi, onClick: () -> Unit, onLongClick: () -> Unit
     }
     val emphasized = row.unread > 0
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .semantics(mergeDescendants = true) {}
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -305,8 +309,8 @@ private fun ChatRow(row: ChatRowUi, onClick: () -> Unit, onLongClick: () -> Unit
                 if (row.unread > 0) {
                     Spacer(Modifier.width(8.dp))
                     Badge(
-                        containerColor = if (row.muted) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
+                        containerColor = if (row.muted) MaterialTheme.colorScheme.outline else CovaTheme.colors.lantern,
+                        contentColor = if (row.muted) MaterialTheme.colorScheme.surface else CovaTheme.colors.onLantern
                     ) {
                         Text(if (row.unread > 99) "99+" else Format.number(row.unread))
                     }

@@ -53,6 +53,7 @@ import com.kotha.app.data.chat.MessageRules
 import com.kotha.app.data.model.Message
 import com.kotha.app.ui.components.ConfirmDialog
 import com.kotha.app.ui.screens.call.rememberCallStarter
+import com.kotha.app.ui.theme.coveBackdrop
 import com.kotha.app.ui.components.OfflineBar
 import com.kotha.app.ui.components.ReportSheet
 import com.kotha.app.ui.screens.chat.media.AttachSheet
@@ -274,6 +275,7 @@ fun ChatScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .coveBackdrop()
         ) {
             LazyColumn(
                 state = listState,
@@ -293,6 +295,7 @@ fun ChatScreen(
                         }
                         is ChatItem.Bubble -> Box(
                             modifier = Modifier
+                                .animateItem()
                                 .fillMaxWidth()
                                 .background(
                                     if (item.message.id in selectedIds) {
